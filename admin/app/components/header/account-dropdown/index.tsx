@@ -1,0 +1,176 @@
+'use client'
+import {
+  Menu,
+  MenuButton,
+  MenuItem,
+  MenuItems,
+  Transition,
+} from '@headlessui/react'
+import {
+  RiAccountCircleLine,
+  RiArrowRightUpLine,
+  RiLogoutBoxRLine,
+  RiSettings3Line,
+  RiTShirt2Line,
+} from '@remixicon/react'
+import Link from 'next/link'
+import { useRouter } from 'next/navigation'
+import { Fragment } from 'react'
+import { useTranslation } from 'react-i18next'
+import { resetUser } from '@/app/components/base/amplitude/utils'
+import Avatar from '@/app/components/base/avatar'
+import ThemeSwitcher from '@/app/components/base/theme-switcher'
+import { ACCOUNT_SETTING_TAB } from '@/app/components/header/account-setting/constants'
+import { useAppContext } from '@/context/app-context'
+import { useModalContext } from '@/context/modal-context'
+import { useLogout } from '@/service/use-common'
+import { cn } from '@/utils/classnames'
+
+export default function AppSelector() {
+  const itemClassName = `
+    flex items-center w-full h-8 pl-3 pr-2 text-text-secondary system-md-regular
+    rounded-lg hover:bg-state-base-hover cursor-pointer gap-1
+  `
+  const router = useRouter()
+
+  const { t } = useTranslation()
+  const { userProfile } = useAppContext()
+  const { setShowAccountSettingModal } = useModalContext()
+
+  const { mutateAsync: logout } = useLogout()
+  const handleLogout = async () => {
+    await logout()
+    resetUser()
+    localStorage.removeItem('setup_status')
+    // Tokens are now stored in cookies and cleared by backend
+
+    // To avoid use other account's education notice info
+    localStorage.removeItem('education-reverify-prev-expire-at')
+    localStorage.removeItem('education-reverify-has-noticed')
+    localStorage.removeItem('education-expired-has-noticed')
+
+    router.push('/signin')
+  }
+
+  return (
+    <div className="">
+      <Menu as="div" className="relative inline-block text-left">
+        {({ open, close }) => (
+          <>
+            <MenuButton
+              className={cn(
+                'inline-flex items-center rounded-[20px] p-0.5 hover:bg-background-default-dodge',
+                open && 'bg-background-default-dodge',
+              )}
+            >
+              <Avatar
+                avatar={userProfile.avatar_url}
+                name={userProfile.name}
+                size={36}
+              />
+            </MenuButton>
+            <Transition
+              as={Fragment}
+              enter="transition ease-out duration-100"
+              enterFrom="transform opacity-0 scale-95"
+              enterTo="transform opacity-100 scale-100"
+              leave="transition ease-in duration-75"
+              leaveFrom="transform opacity-100 scale-100"
+              leaveTo="transform opacity-0 scale-95"
+            >
+              <MenuItems
+                className="
+                    absolute right-0 mt-1.5 w-60 max-w-80
+                    origin-top-right divide-y divide-divider-subtle rounded-xl bg-components-panel-bg-blur shadow-lg
+                    backdrop-blur-sm focus:outline-none
+                  "
+              >
+                <div className="px-1 py-1">
+                  <MenuItem disabled>
+                    <div className="flex flex-nowrap items-center py-2 pl-3 pr-2">
+                      <div className="grow">
+                        <div className="system-md-medium break-all text-text-primary">
+                          {userProfile.name}
+                        </div>
+                        <div className="system-xs-regular break-all text-text-tertiary">
+                          {userProfile.email}
+                        </div>
+                      </div>
+                      <Avatar
+                        avatar={userProfile.avatar_url}
+                        name={userProfile.name}
+                        size={36}
+                      />
+                    </div>
+                  </MenuItem>
+                  <MenuItem>
+                    <Link
+                      className={cn(
+                        itemClassName,
+                        'group',
+                        'data-[active]:bg-state-base-hover',
+                      )}
+                      href="/account"
+                      target="_self"
+                      rel="noopener noreferrer"
+                    >
+                      <RiAccountCircleLine className="size-4 shrink-0 text-text-tertiary" />
+                      <div className="system-md-regular grow px-1 text-text-secondary">
+                        {t('account.account', { ns: 'common' })}
+                      </div>
+                      <RiArrowRightUpLine className="size-[14px] shrink-0 text-text-tertiary" />
+                    </Link>
+                  </MenuItem>
+                  <MenuItem>
+                    <div
+                      className={cn(
+                        itemClassName,
+                        'data-[active]:bg-state-base-hover',
+                      )}
+                      onClick={() =>
+                        setShowAccountSettingModal({
+                          payload: ACCOUNT_SETTING_TAB.API_BASED_EXTENSION,
+                        })}
+                    >
+                      <RiSettings3Line className="size-4 shrink-0 text-text-tertiary" />
+                      <div className="system-md-regular grow px-1 text-text-secondary">
+                        {t('userProfile.settings', { ns: 'common' })}
+                      </div>
+                    </div>
+                  </MenuItem>
+                </div>
+                <MenuItem disabled>
+                  <div className="p-1">
+                    <div className={cn(itemClassName, 'hover:bg-transparent')}>
+                      <RiTShirt2Line className="size-4 shrink-0 text-text-tertiary" />
+                      <div className="system-md-regular grow px-1 text-text-secondary">
+                        {t('theme.theme', { ns: 'common' })}
+                      </div>
+                      <ThemeSwitcher />
+                    </div>
+                  </div>
+                </MenuItem>
+                <MenuItem>
+                  <div className="p-1" onClick={() => handleLogout()}>
+                    <div
+                      className={cn(
+                        itemClassName,
+                        'group justify-between',
+                        'data-[active]:bg-state-base-hover',
+                      )}
+                    >
+                      <RiLogoutBoxRLine className="size-4 shrink-0 text-text-tertiary" />
+                      <div className="system-md-regular grow px-1 text-text-secondary">
+                        {t('userProfile.logout', { ns: 'common' })}
+                      </div>
+                    </div>
+                  </div>
+                </MenuItem>
+              </MenuItems>
+            </Transition>
+          </>
+        )}
+      </Menu>
+    </div>
+  )
+}

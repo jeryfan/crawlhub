@@ -1,0 +1,34 @@
+from enum import IntEnum
+
+
+class ResponseCode(IntEnum):
+    SUCCESS = 200
+    FAIL = 500
+
+    # Auth & Access (401xx, 403xx)
+    UNAUTHORIZED = 401
+    FORBIDDEN = 403
+    WEB_APP_ACCESS_DENIED = 40301
+    WEB_SSO_AUTH_REQUIRED = 40101
+    UNAUTHORIZED_AND_FORCE_LOGOUT = 40102
+    AUTHENTICATION_FAILED = 40103
+    ACCOUNT_IN_FREEZE = 40302
+
+    # Validation / State (400xx)
+    BAD_REQUEST = 400
+    INIT_VALIDATE_FAILED = 40001
+    NOT_INIT_VALIDATED = 40002
+    NOT_SETUP = 40003
+    ALREADY_SETUP = 40004
+
+    # Conflicts (409xx)
+    EMAIL_ALREADY_IN_USE = 40901
+
+    # Files (415xx)
+    FILE_EXTENSION_BLOCKED = 41501
+
+    # Standard HTTP mappings for fallback
+    NOT_FOUND = 404
+    METHOD_NOT_ALLOWED = 405
+    TOO_MANY_REQUESTS = 429
+    UNPROCESSABLE_ENTITY = 422

@@ -1,0 +1,11 @@
+<svg width="80" height="22" viewBox="0 0 80 22" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <style>
+      .logo-text { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; font-weight: 600; }
+    </style>
+  </defs>
+  <!-- Lightning bolt icon -->
+  <path d="M5 0L0 10h4.5L3 22l9-12H7.5L10.5 0H5z" fill="white"/>
+  <!-- FastAPI text -->
+  <text x="15" y="16" class="logo-text" font-size="15" fill="white">FastAPI</text>
+</svg>

@@ -1,0 +1,107 @@
+import type { Viewport } from 'next'
+import { ThemeProvider } from 'next-themes'
+import { Instrument_Serif } from 'next/font/google'
+import { NuqsAdapter } from 'nuqs/adapters/next/app'
+import GlobalPublicStoreProvider from '@/context/global-public-context'
+import { TanstackQueryInitializer } from '@/context/query-client'
+import { getLocaleOnServer } from '@/i18n-config/server'
+import { DatasetAttr } from '@/types/feature'
+import { cn } from '@/utils/classnames'
+import BrowserInitializer from './components/browser-initializer'
+import I18nServer from './components/i18n-server'
+import { ReactScan } from './components/react-scan'
+import SentryInitializer from './components/sentry-initializer'
+import RoutePrefixHandle from './routePrefixHandle'
+import './styles/globals.css'
+import './styles/markdown.scss'
+
+export const viewport: Viewport = {
+  width: 'device-width',
+  initialScale: 1,
+  maximumScale: 1,
+  viewportFit: 'cover',
+  userScalable: false,
+}
+
+const instrumentSerif = Instrument_Serif({
+  weight: ['400'],
+  style: ['normal', 'italic'],
+  subsets: ['latin'],
+  variable: '--font-instrument-serif',
+})
+
+const LocaleLayout = async ({ children }: { children: React.ReactNode }) => {
+  const locale = await getLocaleOnServer()
+
+  const datasetMap: Record<DatasetAttr, string | undefined> = {
+    [DatasetAttr.DATA_API_PREFIX]: process.env.NEXT_PUBLIC_API_PREFIX,
+    [DatasetAttr.DATA_PUBLIC_COOKIE_DOMAIN]:
+      process.env.NEXT_PUBLIC_COOKIE_DOMAIN,
+    [DatasetAttr.DATA_PUBLIC_SUPPORT_MAIL_LOGIN]:
+      process.env.NEXT_PUBLIC_SUPPORT_MAIL_LOGIN,
+    [DatasetAttr.DATA_PUBLIC_SENTRY_DSN]: process.env.NEXT_PUBLIC_SENTRY_DSN,
+    [DatasetAttr.DATA_PUBLIC_MAINTENANCE_NOTICE]:
+      process.env.NEXT_PUBLIC_MAINTENANCE_NOTICE,
+    [DatasetAttr.DATA_PUBLIC_SITE_ABOUT]: process.env.NEXT_PUBLIC_SITE_ABOUT,
+    [DatasetAttr.NEXT_PUBLIC_ZENDESK_WIDGET_KEY]:
+      process.env.NEXT_PUBLIC_ZENDESK_WIDGET_KEY,
+    [DatasetAttr.NEXT_PUBLIC_ZENDESK_FIELD_ID_ENVIRONMENT]:
+      process.env.NEXT_PUBLIC_ZENDESK_FIELD_ID_ENVIRONMENT,
+    [DatasetAttr.NEXT_PUBLIC_ZENDESK_FIELD_ID_VERSION]:
+      process.env.NEXT_PUBLIC_ZENDESK_FIELD_ID_VERSION,
+    [DatasetAttr.NEXT_PUBLIC_ZENDESK_FIELD_ID_EMAIL]:
+      process.env.NEXT_PUBLIC_ZENDESK_FIELD_ID_EMAIL,
+    [DatasetAttr.NEXT_PUBLIC_ZENDESK_FIELD_ID_WORKSPACE_ID]:
+      process.env.NEXT_PUBLIC_ZENDESK_FIELD_ID_WORKSPACE_ID,
+    [DatasetAttr.NEXT_PUBLIC_ZENDESK_FIELD_ID_PLAN]:
+      process.env.NEXT_PUBLIC_ZENDESK_FIELD_ID_PLAN,
+  }
+
+  return (
+    <html
+      lang={locale ?? 'en'}
+      className={cn('h-full', instrumentSerif.variable)}
+      suppressHydrationWarning
+    >
+      <head>
+        <link rel="manifest" href="/manifest.json" />
+        <meta name="theme-color" content="#009688" />
+        <meta name="mobile-web-app-capable" content="yes" />
+        <meta name="apple-mobile-web-app-capable" content="yes" />
+        <meta name="apple-mobile-web-app-status-bar-style" content="default" />
+        <meta name="apple-mobile-web-app-title" content="FastAPI Template" />
+        <link rel="apple-touch-icon" href="/apple-touch-icon.png" />
+        <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+        <meta name="msapplication-TileColor" content="#009688" />
+        <meta name="msapplication-config" content="/browserconfig.xml" />
+      </head>
+      <body className="color-scheme h-full select-auto" {...datasetMap}>
+        <ReactScan />
+        <ThemeProvider
+          attribute="data-theme"
+          defaultTheme="system"
+          enableSystem
+          disableTransitionOnChange
+          enableColorScheme={false}
+        >
+          <NuqsAdapter>
+            <BrowserInitializer>
+              <SentryInitializer>
+                <TanstackQueryInitializer>
+                  <I18nServer>
+                    <GlobalPublicStoreProvider>
+                      {children}
+                    </GlobalPublicStoreProvider>
+                  </I18nServer>
+                </TanstackQueryInitializer>
+              </SentryInitializer>
+            </BrowserInitializer>
+          </NuqsAdapter>
+        </ThemeProvider>
+        <RoutePrefixHandle />
+      </body>
+    </html>
+  )
+}
+
+export default LocaleLayout
