@@ -20,3 +20,8 @@ from .system_setting import SystemSetting
 from .api_key import ApiKey, ApiKeyStatus, ApiUsageLog
 from .api_based_extension import APIBasedExtension
 from .proxy import ProxyRoute, ProxyRouteStatus
+
+# CrawlHub models
+from .crawlhub import Project, Spider, ScriptType
+from .crawlhub import Task as CrawlHubTask, TaskStatus as CrawlHubTaskStatus
+from .crawlhub import Proxy as CrawlHubProxy, ProxyStatus as CrawlHubProxyStatus, ProxyProtocol
