@@ -1,0 +1,132 @@
+from sqlalchemy import func, select
+
+from models.crawlhub import Spider
+from schemas.crawlhub import SpiderCreate, SpiderUpdate
+from services.base_service import BaseService
+
+
+class SpiderService(BaseService):
+    async def get_list(
+        self,
+        page: int = 1,
+        page_size: int = 20,
+        project_id: str | None = None,
+        keyword: str | None = None,
+        is_active: bool | None = None,
+    ) -> tuple[list[Spider], int]:
+        """获取爬虫列表"""
+        query = select(Spider)
+
+        if project_id:
+            query = query.where(Spider.project_id == project_id)
+        if keyword:
+            query = query.where(Spider.name.ilike(f"%{keyword}%"))
+        if is_active is not None:
+            query = query.where(Spider.is_active == is_active)
+
+        count_query = select(func.count()).select_from(query.subquery())
+        total = await self.db.scalar(count_query) or 0
+
+        query = query.order_by(Spider.created_at.desc())
+        query = query.offset((page - 1) * page_size).limit(page_size)
+
+        result = await self.db.execute(query)
+        spiders = list(result.scalars().all())
+
+        return spiders, total
+
+    async def get_by_id(self, spider_id: str) -> Spider | None:
+        """根据 ID 获取爬虫"""
+        query = select(Spider).where(Spider.id == spider_id)
+        result = await self.db.execute(query)
+        return result.scalar_one_or_none()
+
+    async def create(self, data: SpiderCreate) -> Spider:
+        """创建爬虫"""
+        spider = Spider(**data.model_dump())
+        self.db.add(spider)
+        await self.db.commit()
+        await self.db.refresh(spider)
+        return spider
+
+    async def update(self, spider_id: str, data: SpiderUpdate) -> Spider | None:
+        """更新爬虫"""
+        spider = await self.get_by_id(spider_id)
+        if not spider:
+            return None
+
+        update_data = data.model_dump(exclude_unset=True)
+        for key, value in update_data.items():
+            setattr(spider, key, value)
+
+        await self.db.commit()
+        await self.db.refresh(spider)
+        return spider
+
+    async def delete(self, spider_id: str) -> bool:
+        """删除爬虫"""
+        spider = await self.get_by_id(spider_id)
+        if not spider:
+            return False
+
+        await self.db.delete(spider)
+        await self.db.commit()
+        return True
+
+    def get_templates(self) -> dict[str, str]:
+        """获取脚本模板"""
+        return {
+            "httpx": '''import httpx
+from bs4 import BeautifulSoup
+
+def run(config):
+    results = []
+    client = httpx.Client(proxy=config.get("proxy"))
+
+    for url in config["urls"]:
+        resp = client.get(url, headers=config.get("headers", {}))
+        soup = BeautifulSoup(resp.text, "lxml")
+        data = {"title": soup.title.string if soup.title else None}
+        results.append({"url": url, "data": data})
+
+    return results
+''',
+            "scrapy": '''import scrapy
+
+class MySpider(scrapy.Spider):
+    name = "my_spider"
+
+    def __init__(self, config=None, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.config = config or {}
+        self.start_urls = self.config.get("urls", [])
+
+    def parse(self, response):
+        yield {
+            "url": response.url,
+            "title": response.css("title::text").get(),
+        }
+''',
+            "playwright": '''from playwright.sync_api import sync_playwright
+
+def run(config):
+    results = []
+
+    with sync_playwright() as p:
+        browser_args = {}
+        if config.get("proxy"):
+            browser_args["proxy"] = {"server": config["proxy"]}
+
+        browser = p.chromium.launch(**browser_args)
+        page = browser.new_page()
+
+        for url in config["urls"]:
+            page.goto(url)
+            data = {"title": page.title()}
+            results.append({"url": url, "data": data})
+
+        browser.close()
+
+    return results
+''',
+        }
