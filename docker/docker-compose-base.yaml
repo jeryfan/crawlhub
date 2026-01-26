@@ -102,8 +102,6 @@ services:
         condition: service_healthy
       admin:
         condition: service_started
-      web:
-        condition: service_started
     ports:
       - "80:80"
     volumes:

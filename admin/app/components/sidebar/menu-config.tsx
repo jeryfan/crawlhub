@@ -3,11 +3,14 @@
 import type { MenuItem } from '@/types/sidebar'
 import {
   RiAdminLine,
+  RiBugLine,
   RiBuilding2Line,
   RiDashboardLine,
   RiExchangeLine,
+  RiFolderLine,
   RiGroupLine,
   RiKey2Line,
+  RiServerLine,
   RiSettings3Line,
   RiTicketLine,
   RiWallet3Line,
@@ -19,6 +22,31 @@ export const menuItems: MenuItem[] = [
     label: '仪表盘',
     icon: <RiDashboardLine className="h-5 w-5" />,
     path: '/dashboard',
+  },
+  {
+    key: 'crawlhub',
+    label: '爬虫管理',
+    icon: <RiBugLine className="h-5 w-5" />,
+    children: [
+      {
+        key: 'crawlhub-projects',
+        label: '项目管理',
+        icon: <RiFolderLine className="h-5 w-5" />,
+        path: '/crawlhub/projects',
+      },
+      {
+        key: 'crawlhub-spiders',
+        label: '爬虫列表',
+        icon: <RiBugLine className="h-5 w-5" />,
+        path: '/crawlhub/spiders',
+      },
+      {
+        key: 'crawlhub-proxies',
+        label: '代理池',
+        icon: <RiServerLine className="h-5 w-5" />,
+        path: '/crawlhub/proxies',
+      },
+    ],
   },
   {
     key: 'users',
