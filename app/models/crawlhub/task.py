@@ -8,7 +8,7 @@ from models.base import Base, DefaultFieldsMixin
 from models.types import StringUUID
 
 
-class TaskStatus(str, enum.Enum):
+class SpiderTaskStatus(str, enum.Enum):
     """任务状态"""
     PENDING = "pending"
     RUNNING = "running"
@@ -17,7 +17,7 @@ class TaskStatus(str, enum.Enum):
     CANCELLED = "cancelled"
 
 
-class Task(DefaultFieldsMixin, Base):
+class SpiderTask(DefaultFieldsMixin, Base):
     """爬虫任务"""
 
     __tablename__ = "crawlhub_tasks"
@@ -25,8 +25,8 @@ class Task(DefaultFieldsMixin, Base):
     spider_id: Mapped[str] = mapped_column(
         StringUUID, ForeignKey("crawlhub_spiders.id", ondelete="CASCADE"), nullable=False
     )
-    status: Mapped[TaskStatus] = mapped_column(
-        Enum(TaskStatus), default=TaskStatus.PENDING, comment="任务状态"
+    status: Mapped[SpiderTaskStatus] = mapped_column(
+        Enum(SpiderTaskStatus), default=SpiderTaskStatus.PENDING, comment="任务状态"
     )
     progress: Mapped[int] = mapped_column(Integer, default=0, comment="进度百分比")
     total_count: Mapped[int] = mapped_column(Integer, default=0, comment="总数量")
@@ -42,4 +42,4 @@ class Task(DefaultFieldsMixin, Base):
     spider: Mapped["Spider"] = relationship("Spider", back_populates="tasks")
 
     def __repr__(self) -> str:
-        return f"<Task {self.id} status={self.status}>"
+        return f"<SpiderTask {self.id} status={self.status}>"

@@ -6,14 +6,15 @@ from schemas.crawlhub import (
     SpiderCreate,
     SpiderUpdate,
     SpiderResponse,
-    SpiderListResponse,
 )
+from schemas.platform import PaginatedResponse
+from schemas.response import ApiResponse, MessageResponse
 from services.crawlhub import SpiderService
 
 router = APIRouter(prefix="/spiders", tags=["CrawlHub - Spiders"])
 
 
-@router.get("", response_model=SpiderListResponse)
+@router.get("", response_model=ApiResponse[PaginatedResponse[SpiderResponse]])
 async def list_spiders(
     page: int = Query(1, ge=1),
     page_size: int = Query(20, ge=1, le=100),
@@ -25,22 +26,27 @@ async def list_spiders(
     """获取爬虫列表"""
     service = SpiderService(db)
     spiders, total = await service.get_list(page, page_size, project_id, keyword, is_active)
-    return SpiderListResponse(
-        items=[SpiderResponse.model_validate(s) for s in spiders],
-        total=total,
+    total_pages = (total + page_size - 1) // page_size
+
+    return ApiResponse(
+        data=PaginatedResponse(
+            items=[SpiderResponse.model_validate(s) for s in spiders],
+            total=total,
+            page=page,
+            page_size=page_size,
+            total_pages=total_pages,
+        )
     )
 
 
-@router.get("/templates")
-async def get_templates(
-    db: AsyncSession = Depends(get_db),
-):
+@router.get("/templates", response_model=ApiResponse[list])
+async def get_templates():
     """获取脚本模板"""
-    service = SpiderService(db)
-    return service.get_templates()
+    service = SpiderService(None)
+    return ApiResponse(data=service.get_templates())
 
 
-@router.get("/{spider_id}", response_model=SpiderResponse)
+@router.get("/{spider_id}", response_model=ApiResponse[SpiderResponse])
 async def get_spider(
     spider_id: str,
     db: AsyncSession = Depends(get_db),
@@ -49,11 +55,11 @@ async def get_spider(
     service = SpiderService(db)
     spider = await service.get_by_id(spider_id)
     if not spider:
-        raise HTTPException(status_code=404, detail="Spider not found")
-    return SpiderResponse.model_validate(spider)
+        raise HTTPException(status_code=404, detail="爬虫不存在")
+    return ApiResponse(data=SpiderResponse.model_validate(spider))
 
 
-@router.post("", response_model=SpiderResponse)
+@router.post("", response_model=ApiResponse[SpiderResponse])
 async def create_spider(
     data: SpiderCreate,
     db: AsyncSession = Depends(get_db),
@@ -61,10 +67,10 @@ async def create_spider(
     """创建爬虫"""
     service = SpiderService(db)
     spider = await service.create(data)
-    return SpiderResponse.model_validate(spider)
+    return ApiResponse(data=SpiderResponse.model_validate(spider))
 
 
-@router.put("/{spider_id}", response_model=SpiderResponse)
+@router.put("/{spider_id}", response_model=ApiResponse[SpiderResponse])
 async def update_spider(
     spider_id: str,
     data: SpiderUpdate,
@@ -74,11 +80,11 @@ async def update_spider(
     service = SpiderService(db)
     spider = await service.update(spider_id, data)
     if not spider:
-        raise HTTPException(status_code=404, detail="Spider not found")
-    return SpiderResponse.model_validate(spider)
+        raise HTTPException(status_code=404, detail="爬虫不存在")
+    return ApiResponse(data=SpiderResponse.model_validate(spider))
 
 
-@router.delete("/{spider_id}")
+@router.delete("/{spider_id}", response_model=MessageResponse)
 async def delete_spider(
     spider_id: str,
     db: AsyncSession = Depends(get_db),
@@ -87,5 +93,5 @@ async def delete_spider(
     service = SpiderService(db)
     success = await service.delete(spider_id)
     if not success:
-        raise HTTPException(status_code=404, detail="Spider not found")
-    return {"message": "Spider deleted"}
+        raise HTTPException(status_code=404, detail="爬虫不存在")
+    return MessageResponse(msg="爬虫删除成功")

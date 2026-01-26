@@ -33,8 +33,8 @@ class Spider(DefaultFieldsMixin, Base):
 
     # Relationships
     project: Mapped["Project"] = relationship("Project", back_populates="spiders")
-    tasks: Mapped[list["Task"]] = relationship(
-        "Task", back_populates="spider", cascade="all, delete-orphan"
+    tasks: Mapped[list["SpiderTask"]] = relationship(
+        "SpiderTask", back_populates="spider", cascade="all, delete-orphan"
     )
 
     def __repr__(self) -> str:

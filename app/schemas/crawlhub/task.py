@@ -2,13 +2,13 @@ from datetime import datetime
 
 from pydantic import BaseModel, Field
 
-from models.crawlhub import TaskStatus
+from models.crawlhub import SpiderTaskStatus
 
 
 class TaskResponse(BaseModel):
     id: str
     spider_id: str
-    status: TaskStatus
+    status: SpiderTaskStatus
     progress: int
     total_count: int
     success_count: int

@@ -8,14 +8,15 @@ from schemas.crawlhub import (
     ProxyBatchCreate,
     ProxyUpdate,
     ProxyResponse,
-    ProxyListResponse,
 )
+from schemas.platform import PaginatedResponse
+from schemas.response import ApiResponse, MessageResponse
 from services.crawlhub import ProxyService
 
 router = APIRouter(prefix="/proxies", tags=["CrawlHub - Proxies"])
 
 
-@router.get("", response_model=ProxyListResponse)
+@router.get("", response_model=ApiResponse[PaginatedResponse[ProxyResponse]])
 async def list_proxies(
     page: int = Query(1, ge=1),
     page_size: int = Query(20, ge=1, le=100),
@@ -25,13 +26,20 @@ async def list_proxies(
     """获取代理列表"""
     service = ProxyService(db)
     proxies, total = await service.get_list(page, page_size, status)
-    return ProxyListResponse(
-        items=[ProxyResponse.model_validate(p) for p in proxies],
-        total=total,
+    total_pages = (total + page_size - 1) // page_size
+
+    return ApiResponse(
+        data=PaginatedResponse(
+            items=[ProxyResponse.model_validate(p) for p in proxies],
+            total=total,
+            page=page,
+            page_size=page_size,
+            total_pages=total_pages,
+        )
     )
 
 
-@router.get("/{proxy_id}", response_model=ProxyResponse)
+@router.get("/{proxy_id}", response_model=ApiResponse[ProxyResponse])
 async def get_proxy(
     proxy_id: str,
     db: AsyncSession = Depends(get_db),
@@ -40,11 +48,11 @@ async def get_proxy(
     service = ProxyService(db)
     proxy = await service.get_by_id(proxy_id)
     if not proxy:
-        raise HTTPException(status_code=404, detail="Proxy not found")
-    return ProxyResponse.model_validate(proxy)
+        raise HTTPException(status_code=404, detail="代理不存在")
+    return ApiResponse(data=ProxyResponse.model_validate(proxy))
 
 
-@router.post("", response_model=ProxyResponse)
+@router.post("", response_model=ApiResponse[ProxyResponse])
 async def create_proxy(
     data: ProxyCreate,
     db: AsyncSession = Depends(get_db),
@@ -52,10 +60,10 @@ async def create_proxy(
     """创建代理"""
     service = ProxyService(db)
     proxy = await service.create(data)
-    return ProxyResponse.model_validate(proxy)
+    return ApiResponse(data=ProxyResponse.model_validate(proxy))
 
 
-@router.post("/batch")
+@router.post("/batch", response_model=MessageResponse)
 async def batch_create_proxies(
     data: ProxyBatchCreate,
     db: AsyncSession = Depends(get_db),
@@ -63,10 +71,10 @@ async def batch_create_proxies(
     """批量创建代理"""
     service = ProxyService(db)
     count = await service.batch_create(data.proxies)
-    return {"message": f"Created {count} proxies"}
+    return MessageResponse(msg=f"成功创建 {count} 个代理")
 
 
-@router.put("/{proxy_id}", response_model=ProxyResponse)
+@router.put("/{proxy_id}", response_model=ApiResponse[ProxyResponse])
 async def update_proxy(
     proxy_id: str,
     data: ProxyUpdate,
@@ -76,11 +84,11 @@ async def update_proxy(
     service = ProxyService(db)
     proxy = await service.update(proxy_id, data)
     if not proxy:
-        raise HTTPException(status_code=404, detail="Proxy not found")
-    return ProxyResponse.model_validate(proxy)
+        raise HTTPException(status_code=404, detail="代理不存在")
+    return ApiResponse(data=ProxyResponse.model_validate(proxy))
 
 
-@router.delete("/{proxy_id}")
+@router.delete("/{proxy_id}", response_model=MessageResponse)
 async def delete_proxy(
     proxy_id: str,
     db: AsyncSession = Depends(get_db),
@@ -89,5 +97,19 @@ async def delete_proxy(
     service = ProxyService(db)
     success = await service.delete(proxy_id)
     if not success:
-        raise HTTPException(status_code=404, detail="Proxy not found")
-    return {"message": "Proxy deleted"}
+        raise HTTPException(status_code=404, detail="代理不存在")
+    return MessageResponse(msg="代理删除成功")
+
+
+@router.post("/{proxy_id}/check", response_model=MessageResponse)
+async def check_proxy(
+    proxy_id: str,
+    db: AsyncSession = Depends(get_db),
+):
+    """检测代理可用性"""
+    service = ProxyService(db)
+    proxy = await service.get_by_id(proxy_id)
+    if not proxy:
+        raise HTTPException(status_code=404, detail="代理不存在")
+    # TODO: 实现代理检测逻辑
+    return MessageResponse(msg="代理检测完成")

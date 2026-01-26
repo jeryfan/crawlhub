@@ -6,14 +6,15 @@ from schemas.crawlhub import (
     ProjectCreate,
     ProjectUpdate,
     ProjectResponse,
-    ProjectListResponse,
 )
+from schemas.platform import PaginatedResponse
+from schemas.response import ApiResponse, MessageResponse
 from services.crawlhub import ProjectService
 
 router = APIRouter(prefix="/projects", tags=["CrawlHub - Projects"])
 
 
-@router.get("", response_model=ProjectListResponse)
+@router.get("", response_model=ApiResponse[PaginatedResponse[ProjectResponse]])
 async def list_projects(
     page: int = Query(1, ge=1),
     page_size: int = Query(20, ge=1, le=100),
@@ -23,13 +24,20 @@ async def list_projects(
     """获取项目列表"""
     service = ProjectService(db)
     projects, total = await service.get_list(page, page_size, keyword)
-    return ProjectListResponse(
-        items=[ProjectResponse.model_validate(p) for p in projects],
-        total=total,
+    total_pages = (total + page_size - 1) // page_size
+
+    return ApiResponse(
+        data=PaginatedResponse(
+            items=[ProjectResponse.model_validate(p) for p in projects],
+            total=total,
+            page=page,
+            page_size=page_size,
+            total_pages=total_pages,
+        )
     )
 
 
-@router.get("/{project_id}", response_model=ProjectResponse)
+@router.get("/{project_id}", response_model=ApiResponse[ProjectResponse])
 async def get_project(
     project_id: str,
     db: AsyncSession = Depends(get_db),
@@ -38,11 +46,11 @@ async def get_project(
     service = ProjectService(db)
     project = await service.get_by_id(project_id)
     if not project:
-        raise HTTPException(status_code=404, detail="Project not found")
-    return ProjectResponse.model_validate(project)
+        raise HTTPException(status_code=404, detail="项目不存在")
+    return ApiResponse(data=ProjectResponse.model_validate(project))
 
 
-@router.post("", response_model=ProjectResponse)
+@router.post("", response_model=ApiResponse[ProjectResponse])
 async def create_project(
     data: ProjectCreate,
     db: AsyncSession = Depends(get_db),
@@ -50,10 +58,10 @@ async def create_project(
     """创建项目"""
     service = ProjectService(db)
     project = await service.create(data)
-    return ProjectResponse.model_validate(project)
+    return ApiResponse(data=ProjectResponse.model_validate(project))
 
 
-@router.put("/{project_id}", response_model=ProjectResponse)
+@router.put("/{project_id}", response_model=ApiResponse[ProjectResponse])
 async def update_project(
     project_id: str,
     data: ProjectUpdate,
@@ -63,11 +71,11 @@ async def update_project(
     service = ProjectService(db)
     project = await service.update(project_id, data)
     if not project:
-        raise HTTPException(status_code=404, detail="Project not found")
-    return ProjectResponse.model_validate(project)
+        raise HTTPException(status_code=404, detail="项目不存在")
+    return ApiResponse(data=ProjectResponse.model_validate(project))
 
 
-@router.delete("/{project_id}")
+@router.delete("/{project_id}", response_model=MessageResponse)
 async def delete_project(
     project_id: str,
     db: AsyncSession = Depends(get_db),
@@ -76,5 +84,5 @@ async def delete_project(
     service = ProjectService(db)
     success = await service.delete(project_id)
     if not success:
-        raise HTTPException(status_code=404, detail="Project not found")
-    return {"message": "Project deleted"}
+        raise HTTPException(status_code=404, detail="项目不存在")
+    return MessageResponse(msg="项目删除成功")

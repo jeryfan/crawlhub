@@ -23,5 +23,5 @@ from .proxy import ProxyRoute, ProxyRouteStatus
 
 # CrawlHub models
 from .crawlhub import Project, Spider, ScriptType
-from .crawlhub import Task as CrawlHubTask, TaskStatus as CrawlHubTaskStatus
+from .crawlhub import SpiderTask, SpiderTaskStatus
 from .crawlhub import Proxy as CrawlHubProxy, ProxyStatus as CrawlHubProxyStatus, ProxyProtocol
