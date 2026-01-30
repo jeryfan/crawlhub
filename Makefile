@@ -17,6 +17,7 @@ dev-setup: prepare-docker prepare-api
 # Step 1: Prepare Docker middleware
 prepare-docker:
 	@echo "🐳 Setting up Docker middleware..."
+	@docker network create one
 	@cp -n docker/middleware.env.example docker/middleware.env 2>/dev/null || echo "Docker middleware.env already exists"
 	@cd docker && docker compose -f docker-compose.middleware.yaml --env-file middleware.env -p fastapi-middlewares-dev up -d
 	@echo "✅ Docker middleware started"
