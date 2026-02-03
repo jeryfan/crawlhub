@@ -169,7 +169,7 @@ const SpiderDetailPage = () => {
           </button>
           <h1 className="text-lg font-semibold text-text-primary">{spider.name}</h1>
           <span className="rounded bg-background-section px-1.5 py-0.5 text-xs text-text-tertiary">
-            {spider.script_type}
+            {sourceLabels[spider.source] || spider.source}
           </span>
         </div>
 

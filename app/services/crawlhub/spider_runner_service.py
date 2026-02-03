@@ -7,7 +7,7 @@ from typing import AsyncGenerator
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from models.crawlhub import ProjectType, Spider, SpiderTask, SpiderTaskStatus
+from models.crawlhub import ProjectSource, Spider, SpiderTask, SpiderTaskStatus
 
 
 class SpiderRunnerService:
@@ -32,8 +32,8 @@ class SpiderRunnerService:
         Note: 文件管理现在由 Coder 工作区处理，此方法仅用于单文件项目的 script_content。
         对于多文件项目，请使用 Coder 工作区进行开发和测试。
         """
-        # 对于单文件项目，使用 script_content
-        if spider.project_type == ProjectType.SINGLE_FILE and spider.script_content:
+        # 对于有 script_content 的项目，写入主文件
+        if spider.script_content:
             main_file = work_dir / "main.py"
             main_file.write_text(spider.script_content)
 
@@ -60,17 +60,13 @@ class SpiderRunnerService:
                 yield {"event": "status", "data": {"status": "preparing", "message": "准备执行环境..."}}
 
                 # 确定入口点
-                if spider.project_type == ProjectType.MULTI_FILE:
-                    entry_point = spider.entry_point or "main.py:run"
-                else:
-                    # 单文件项目，找到主文件
-                    entry_point = "main.py:run"
+                entry_point = spider.entry_point or "main.py:run"
 
-                # 执行脚本
-                if spider.script_type.value == "scrapy":
+                # 根据 source 判断运行方式
+                if spider.source == ProjectSource.SCRAPY:
                     cmd = ["scrapy", "crawl", spider.name]
                 else:
-                    # httpx 或 playwright
+                    # 其他来源按普通 Python 脚本处理
                     cmd = ["python", "-c", f"""
 import sys
 sys.path.insert(0, '{work_dir}')

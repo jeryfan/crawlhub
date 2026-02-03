@@ -1,7 +1,7 @@
 'use client'
 
 import type { ColumnDef, SortingState } from '@/app/components/base/table'
-import type { ProjectSource, ScriptType, Spider, SpiderCreate, SpiderUpdate } from '@/types/crawlhub'
+import type { ProjectSource, Spider, SpiderCreate, SpiderUpdate } from '@/types/crawlhub'
 import {
   RiAddLine,
   RiBugLine,
@@ -40,12 +40,6 @@ import {
   useUploadToWorkspace,
 } from '@/service/use-crawlhub'
 
-const scriptTypeOptions = [
-  { value: 'httpx', name: 'httpx' },
-  { value: 'scrapy', name: 'Scrapy' },
-  { value: 'playwright', name: 'Playwright' },
-]
-
 const sourceOptions = [
   { value: 'empty', name: '新建空项目' },
   { value: 'scrapy', name: '新建 Scrapy 项目' },
@@ -66,7 +60,6 @@ const SpiderFormModal = ({ isOpen, onClose, spiderId, onSubmit, isLoading }: Spi
     project_id: '',
     name: '',
     description: '',
-    script_type: 'httpx',
     source: 'empty',
     git_repo: '',
   })
@@ -86,7 +79,6 @@ const SpiderFormModal = ({ isOpen, onClose, spiderId, onSubmit, isLoading }: Spi
           project_id: spiderDetail.project_id,
           name: spiderDetail.name,
           description: spiderDetail.description || '',
-          script_type: spiderDetail.script_type,
           source: spiderDetail.source || 'empty',
           git_repo: spiderDetail.git_repo || '',
         })
@@ -96,20 +88,12 @@ const SpiderFormModal = ({ isOpen, onClose, spiderId, onSubmit, isLoading }: Spi
           project_id: '',
           name: '',
           description: '',
-          script_type: 'httpx',
           source: 'empty',
           git_repo: '',
         })
       }
     }
   }, [isOpen, spiderDetail, spiderId])
-
-  // 当脚本类型变化时，自动调整 source
-  useEffect(() => {
-    if (!spiderId && formData.script_type === 'scrapy' && formData.source === 'empty') {
-      setFormData(prev => ({ ...prev, source: 'scrapy' }))
-    }
-  }, [formData.script_type, formData.source, spiderId])
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault()
@@ -166,15 +150,6 @@ const SpiderFormModal = ({ isOpen, onClose, spiderId, onSubmit, isLoading }: Spi
                     onChange={e => setFormData({ ...formData, name: e.target.value })}
                     placeholder="请输入爬虫名称"
                     required
-                  />
-                </div>
-                <div>
-                  <label className="mb-1.5 block text-sm text-text-secondary">脚本类型</label>
-                  <SimpleSelect
-                    className="w-full"
-                    defaultValue={formData.script_type}
-                    items={scriptTypeOptions}
-                    onSelect={item => setFormData({ ...formData, script_type: item.value as ScriptType })}
                   />
                 </div>
                 {!isEditMode && (
@@ -435,14 +410,22 @@ const SpidersPage = () => {
       },
     },
     {
-      id: 'script_type',
-      header: '脚本类型',
-      size: 120,
-      cell: ({ row }) => (
-        <span className="inline-flex items-center rounded-md bg-background-section px-2 py-1 text-xs font-medium text-text-secondary">
-          {row.original.script_type}
-        </span>
-      ),
+      id: 'source',
+      header: '项目来源',
+      size: 140,
+      cell: ({ row }) => {
+        const sourceLabels: Record<string, string> = {
+          empty: '空项目',
+          scrapy: 'Scrapy',
+          git: 'Git 仓库',
+          upload: '上传文件',
+        }
+        return (
+          <span className="inline-flex items-center rounded-md bg-background-section px-2 py-1 text-xs font-medium text-text-secondary">
+            {sourceLabels[row.original.source] || row.original.source}
+          </span>
+        )
+      },
       meta: {
         skeletonClassName: 'h-6 w-16',
       },

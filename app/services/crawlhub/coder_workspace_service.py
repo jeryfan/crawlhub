@@ -8,7 +8,7 @@ import logging
 import os
 import re
 
-from models.crawlhub import Spider, ScriptType
+from models.crawlhub import Spider
 from services.base_service import BaseService
 
 from .coder_client import CoderClient, CoderAPIError

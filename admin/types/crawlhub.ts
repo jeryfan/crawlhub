@@ -1,8 +1,5 @@
 // CrawlHub Types
 
-// Script Type
-export type ScriptType = 'httpx' | 'scrapy' | 'playwright'
-
 // Project Source - 项目来源类型
 export type ProjectSource = 'empty' | 'scrapy' | 'git' | 'upload'
 
@@ -45,13 +42,10 @@ export type Spider = {
   project_id: string
   name: string
   description: string | null
-  script_type: ScriptType
   script_content: string | null
   cron_expr: string | null
   is_active: boolean
-  project_type: ProjectType
   entry_point: string | null
-  config: Record<string, any> | null
   source: ProjectSource
   git_repo: string | null
   coder_workspace_id: string | null
@@ -64,13 +58,10 @@ export type SpiderCreate = {
   project_id: string
   name: string
   description?: string
-  script_type: ScriptType
   script_content?: string
   cron_expr?: string
   is_active?: boolean
-  project_type?: ProjectType
   entry_point?: string
-  config?: Record<string, any>
   source?: ProjectSource
   git_repo?: string
 }
@@ -78,13 +69,10 @@ export type SpiderCreate = {
 export type SpiderUpdate = {
   name?: string
   description?: string
-  script_type?: ScriptType
   script_content?: string
   cron_expr?: string
   is_active?: boolean
-  project_type?: ProjectType
   entry_point?: string
-  config?: Record<string, any>
   source?: ProjectSource
   git_repo?: string
 }
@@ -104,9 +92,10 @@ export type SpiderListResponse = {
   page_size: number
 }
 
+// Spider Template
 export type SpiderTemplate = {
   name: string
-  script_type: ScriptType
+  source: ProjectSource
   content: string
 }
 
@@ -195,63 +184,6 @@ export type CrawlHubProxyListResponse = {
   total: number
   page: number
   page_size: number
-}
-
-// Project Type
-export type ProjectType = 'single_file' | 'multi_file'
-
-// Spider File Types
-export type SpiderFile = {
-  id: string
-  spider_id: string
-  file_path: string
-  storage_key: string
-  file_size: number
-  content_type: string
-  created_at: string
-  updated_at: string
-}
-
-export type SpiderFileTreeNode = {
-  id: string | null
-  name: string
-  path: string
-  is_dir: boolean
-  children: SpiderFileTreeNode[]
-  file_size?: number
-}
-
-export type SpiderFileContent = {
-  id: string
-  file_path: string
-  content: string
-  content_type: string
-}
-
-// Code Session Types (deprecated, replaced by Coder Workspace)
-export type CodeSessionStatus = 'pending' | 'starting' | 'ready' | 'syncing' | 'stopped' | 'failed'
-
-export type CodeSession = {
-  id: string
-  spider_id: string
-  status: CodeSessionStatus
-  url: string | null
-  token: string | null
-  created_at: string
-  expires_at: string
-}
-
-export type CodeSessionStatusResponse = {
-  id: string
-  status: CodeSessionStatus
-  last_active_at: string
-  expires_at: string
-}
-
-export type CodeSessionSyncResult = {
-  success: boolean
-  files_synced: number
-  message: string | null
 }
 
 // Coder Workspace Types
