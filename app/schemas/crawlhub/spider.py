@@ -2,7 +2,7 @@ from datetime import datetime
 
 from pydantic import BaseModel, Field
 
-from models.crawlhub import ScriptType
+from models.crawlhub import ScriptType, ProjectType
 
 
 class SpiderBase(BaseModel):
@@ -12,6 +12,8 @@ class SpiderBase(BaseModel):
     script_content: str | None = Field(None, description="脚本内容")
     is_active: bool = Field(default=True, description="是否启用")
     cron_expr: str | None = Field(None, description="Cron表达式")
+    project_type: ProjectType = Field(default=ProjectType.SINGLE_FILE, description="项目类型")
+    entry_point: str | None = Field(None, description="入口点")
 
 
 class SpiderCreate(SpiderBase):
@@ -25,6 +27,8 @@ class SpiderUpdate(BaseModel):
     script_content: str | None = None
     is_active: bool | None = None
     cron_expr: str | None = None
+    project_type: ProjectType | None = None
+    entry_point: str | None = None
 
 
 class SpiderResponse(SpiderBase):

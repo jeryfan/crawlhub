@@ -1,17 +1,23 @@
 import enum
 
-from sqlalchemy import Boolean, Enum, ForeignKey, String, Text
-from sqlalchemy.orm import Mapped, mapped_column, relationship
+from sqlalchemy import Boolean, String, Text
+from sqlalchemy.orm import Mapped, mapped_column
 
 from models.base import Base, DefaultFieldsMixin
-from models.types import StringUUID
+from models.types import EnumText, StringUUID
 
 
-class ScriptType(str, enum.Enum):
+class ScriptType(enum.StrEnum):
     """脚本类型"""
     HTTPX = "httpx"
     SCRAPY = "scrapy"
     PLAYWRIGHT = "playwright"
+
+
+class ProjectType(enum.StrEnum):
+    """项目类型"""
+    SINGLE_FILE = "single_file"
+    MULTI_FILE = "multi_file"
 
 
 class Spider(DefaultFieldsMixin, Base):
@@ -19,22 +25,24 @@ class Spider(DefaultFieldsMixin, Base):
 
     __tablename__ = "crawlhub_spiders"
 
-    project_id: Mapped[str] = mapped_column(
-        StringUUID, ForeignKey("crawlhub_projects.id", ondelete="CASCADE"), nullable=False
-    )
+    project_id: Mapped[str] = mapped_column(StringUUID, nullable=False)
     name: Mapped[str] = mapped_column(String(255), nullable=False, comment="爬虫名称")
     description: Mapped[str | None] = mapped_column(Text, nullable=True, comment="爬虫描述")
     script_type: Mapped[ScriptType] = mapped_column(
-        Enum(ScriptType), default=ScriptType.HTTPX, comment="脚本类型"
+        EnumText(ScriptType), default=ScriptType.HTTPX, comment="脚本类型"
     )
     script_content: Mapped[str | None] = mapped_column(Text, nullable=True, comment="脚本内容")
     is_active: Mapped[bool] = mapped_column(Boolean, default=True, comment="是否启用")
     cron_expr: Mapped[str | None] = mapped_column(String(100), nullable=True, comment="Cron表达式")
-
-    # Relationships
-    project: Mapped["Project"] = relationship("Project", back_populates="spiders")
-    tasks: Mapped[list["SpiderTask"]] = relationship(
-        "SpiderTask", back_populates="spider", cascade="all, delete-orphan"
+    project_type: Mapped[ProjectType] = mapped_column(
+        EnumText(ProjectType), default=ProjectType.SINGLE_FILE, comment="项目类型"
+    )
+    entry_point: Mapped[str | None] = mapped_column(String(255), nullable=True, comment="入口点")
+    coder_workspace_id: Mapped[str | None] = mapped_column(
+        String(100), nullable=True, comment="Coder 工作区 ID"
+    )
+    coder_workspace_name: Mapped[str | None] = mapped_column(
+        String(255), nullable=True, comment="Coder 工作区名称"
     )
 
     def __repr__(self) -> str:

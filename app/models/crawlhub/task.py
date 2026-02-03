@@ -1,14 +1,14 @@
 import enum
 from datetime import datetime
 
-from sqlalchemy import DateTime, Enum, ForeignKey, Integer, String, Text
-from sqlalchemy.orm import Mapped, mapped_column, relationship
+from sqlalchemy import Boolean, DateTime, Integer, String, Text
+from sqlalchemy.orm import Mapped, mapped_column
 
 from models.base import Base, DefaultFieldsMixin
-from models.types import StringUUID
+from models.types import EnumText, StringUUID
 
 
-class SpiderTaskStatus(str, enum.Enum):
+class SpiderTaskStatus(enum.StrEnum):
     """任务状态"""
     PENDING = "pending"
     RUNNING = "running"
@@ -22,11 +22,9 @@ class SpiderTask(DefaultFieldsMixin, Base):
 
     __tablename__ = "crawlhub_tasks"
 
-    spider_id: Mapped[str] = mapped_column(
-        StringUUID, ForeignKey("crawlhub_spiders.id", ondelete="CASCADE"), nullable=False
-    )
+    spider_id: Mapped[str] = mapped_column(StringUUID, nullable=False)
     status: Mapped[SpiderTaskStatus] = mapped_column(
-        Enum(SpiderTaskStatus), default=SpiderTaskStatus.PENDING, comment="任务状态"
+        EnumText(SpiderTaskStatus), default=SpiderTaskStatus.PENDING, comment="任务状态"
     )
     progress: Mapped[int] = mapped_column(Integer, default=0, comment="进度百分比")
     total_count: Mapped[int] = mapped_column(Integer, default=0, comment="总数量")
@@ -37,9 +35,7 @@ class SpiderTask(DefaultFieldsMixin, Base):
     worker_id: Mapped[str | None] = mapped_column(String(100), nullable=True, comment="Worker ID")
     container_id: Mapped[str | None] = mapped_column(String(100), nullable=True, comment="容器ID")
     error_message: Mapped[str | None] = mapped_column(Text, nullable=True, comment="错误信息")
-
-    # Relationships
-    spider: Mapped["Spider"] = relationship("Spider", back_populates="tasks")
+    is_test: Mapped[bool] = mapped_column(Boolean, default=False, comment="是否为测试运行")
 
     def __repr__(self) -> str:
         return f"<SpiderTask {self.id} status={self.status}>"

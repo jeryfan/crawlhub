@@ -46,6 +46,8 @@ export type Spider = {
   script_content: string | null
   cron_expr: string | null
   is_active: boolean
+  project_type: ProjectType
+  entry_point: string | null
   config: Record<string, any> | null
   created_at: string
   updated_at: string
@@ -59,6 +61,8 @@ export type SpiderCreate = {
   script_content?: string
   cron_expr?: string
   is_active?: boolean
+  project_type?: ProjectType
+  entry_point?: string
   config?: Record<string, any>
 }
 
@@ -69,6 +73,8 @@ export type SpiderUpdate = {
   script_content?: string
   cron_expr?: string
   is_active?: boolean
+  project_type?: ProjectType
+  entry_point?: string
   config?: Record<string, any>
 }
 
@@ -178,4 +184,85 @@ export type CrawlHubProxyListResponse = {
   total: number
   page: number
   page_size: number
+}
+
+// Project Type
+export type ProjectType = 'single_file' | 'multi_file'
+
+// Spider File Types
+export type SpiderFile = {
+  id: string
+  spider_id: string
+  file_path: string
+  storage_key: string
+  file_size: number
+  content_type: string
+  created_at: string
+  updated_at: string
+}
+
+export type SpiderFileTreeNode = {
+  id: string | null
+  name: string
+  path: string
+  is_dir: boolean
+  children: SpiderFileTreeNode[]
+  file_size?: number
+}
+
+export type SpiderFileContent = {
+  id: string
+  file_path: string
+  content: string
+  content_type: string
+}
+
+// Code Session Types (deprecated, replaced by Coder Workspace)
+export type CodeSessionStatus = 'pending' | 'starting' | 'ready' | 'syncing' | 'stopped' | 'failed'
+
+export type CodeSession = {
+  id: string
+  spider_id: string
+  status: CodeSessionStatus
+  url: string | null
+  token: string | null
+  created_at: string
+  expires_at: string
+}
+
+export type CodeSessionStatusResponse = {
+  id: string
+  status: CodeSessionStatus
+  last_active_at: string
+  expires_at: string
+}
+
+export type CodeSessionSyncResult = {
+  success: boolean
+  files_synced: number
+  message: string | null
+}
+
+// Coder Workspace Types
+export type CoderWorkspaceStatus = 'pending' | 'starting' | 'running' | 'stopping' | 'stopped' | 'failed' | 'unknown'
+
+export type CoderWorkspace = {
+  id: string
+  name: string
+  status: CoderWorkspaceStatus
+  url: string | null
+  created_at: string | null
+}
+
+export type CoderWorkspaceStatusResponse = {
+  status: CoderWorkspaceStatus
+  url: string | null
+  last_used_at: string | null
+}
+
+export type FileUploadResult = {
+  success: boolean
+  files_count: number
+  uploaded_files: string[]
+  errors?: string[]
 }

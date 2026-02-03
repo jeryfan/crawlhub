@@ -8,6 +8,11 @@ from .proxy import (
     ProxyResponse,
     ProxyListResponse,
 )
+from .coder_workspace import (
+    CoderWorkspaceResponse,
+    CoderWorkspaceStatusResponse,
+    FileUploadResponse,
+)
 
 __all__ = [
     "ProjectCreate",
@@ -26,4 +31,7 @@ __all__ = [
     "ProxyUpdate",
     "ProxyResponse",
     "ProxyListResponse",
+    "CoderWorkspaceResponse",
+    "CoderWorkspaceStatusResponse",
+    "FileUploadResponse",
 ]

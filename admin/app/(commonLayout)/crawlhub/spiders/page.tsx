@@ -6,11 +6,13 @@ import {
   RiAddLine,
   RiBugLine,
   RiCloseLine,
+  RiCodeSSlashLine,
   RiDeleteBinLine,
   RiEditLine,
   RiPlayLine,
+  RiUploadLine,
 } from '@remixicon/react'
-import { useCallback, useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import Button from '@/app/components/base/button'
 import Confirm from '@/app/components/base/confirm'
 import Input from '@/app/components/base/input'
@@ -27,6 +29,7 @@ import Textarea from '@/app/components/base/textarea'
 import Toast from '@/app/components/base/toast'
 import useTimestamp from '@/hooks/use-timestamp'
 import {
+  useCreateOrGetWorkspace,
   useCreateSpider,
   useDeleteSpider,
   useProjects,
@@ -34,6 +37,7 @@ import {
   useSpider,
   useSpiders,
   useUpdateSpider,
+  useUploadToWorkspace,
 } from '@/service/use-crawlhub'
 
 const scriptTypeOptions = [
@@ -158,6 +162,11 @@ const SpiderFormModal = ({ isOpen, onClose, spiderId, onSubmit, isLoading }: Spi
                     rows={3}
                   />
                 </div>
+                {!isEditMode && (
+                  <p className="text-xs text-text-tertiary">
+                    创建后将自动配置 Coder 在线开发环境
+                  </p>
+                )}
                 <div className="flex justify-end gap-3 pt-4">
                   <Button variant="secondary" onClick={onClose}>取消</Button>
                   <Button variant="primary" type="submit" loading={isLoading}>
@@ -166,6 +175,103 @@ const SpiderFormModal = ({ isOpen, onClose, spiderId, onSubmit, isLoading }: Spi
                 </div>
               </form>
             )}
+      </div>
+    </Modal>
+  )
+}
+
+type UploadModalProps = {
+  isOpen: boolean
+  onClose: () => void
+  spider: Spider | null
+}
+
+const UploadModal = ({ isOpen, onClose, spider }: UploadModalProps) => {
+  const uploadMutation = useUploadToWorkspace()
+  const [file, setFile] = useState<File | null>(null)
+  const [status, setStatus] = useState<'idle' | 'waiting' | 'uploading' | 'done'>('idle')
+  const fileInputRef = useRef<HTMLInputElement>(null)
+
+  const handleUpload = async () => {
+    if (!file || !spider)
+      return
+
+    setStatus('waiting')
+
+    try {
+      const result = await uploadMutation.mutateAsync({
+        spiderId: spider.id,
+        file,
+      })
+      setStatus('done')
+      Toast.notify({ type: 'success', message: `成功上传 ${result.files_count} 个文件` })
+      handleClose()
+    }
+    catch {
+      Toast.notify({ type: 'error', message: '上传失败' })
+      setStatus('idle')
+    }
+  }
+
+  const handleClose = () => {
+    setFile(null)
+    setStatus('idle')
+    if (fileInputRef.current)
+      fileInputRef.current.value = ''
+    onClose()
+  }
+
+  const isUploading = status === 'waiting' || status === 'uploading' || uploadMutation.isPending
+
+  return (
+    <Modal isShow={isOpen} onClose={handleClose} className="!max-w-md">
+      <div className="p-6">
+        <div className="mb-6 flex items-center justify-between">
+          <h3 className="text-lg font-semibold text-text-primary">上传脚本到工作区</h3>
+          <button onClick={handleClose} className="text-text-tertiary hover:text-text-secondary">
+            <RiCloseLine className="h-5 w-5" />
+          </button>
+        </div>
+
+        <p className="mb-4 text-sm text-text-secondary">
+          支持 .py, .json, .yaml 文件或 .zip 压缩包
+        </p>
+
+        <div className="mb-4">
+          <input
+            ref={fileInputRef}
+            type="file"
+            accept=".py,.json,.yaml,.yml,.zip,.txt,.md,.cfg,.ini,.toml"
+            onChange={e => setFile(e.target.files?.[0] || null)}
+            className="block w-full text-sm text-text-secondary file:mr-4 file:rounded-md file:border-0 file:bg-components-button-secondary-bg file:px-4 file:py-2 file:text-sm file:font-medium file:text-text-primary hover:file:bg-components-button-secondary-bg-hover"
+          />
+        </div>
+
+        {file && (
+          <p className="mb-4 text-sm text-text-tertiary">
+            已选择: {file.name} ({(file.size / 1024).toFixed(1)} KB)
+          </p>
+        )}
+
+        {status === 'waiting' && (
+          <p className="mb-4 text-sm text-text-tertiary">
+            正在等待工作区就绪...
+          </p>
+        )}
+
+        <div className="flex justify-end gap-3">
+          <Button variant="secondary" onClick={handleClose} disabled={isUploading}>
+            取消
+          </Button>
+          <Button
+            variant="primary"
+            onClick={handleUpload}
+            loading={isUploading}
+            disabled={!file}
+          >
+            上传
+          </Button>
+        </div>
       </div>
     </Modal>
   )
@@ -181,6 +287,7 @@ const SpidersPage = () => {
   const [showCreateModal, setShowCreateModal] = useState(false)
   const [showEditModal, setShowEditModal] = useState(false)
   const [showDeleteModal, setShowDeleteModal] = useState(false)
+  const [showUploadModal, setShowUploadModal] = useState(false)
   const [editingId, setEditingId] = useState<string | null>(null)
   const [selectedSpider, setSelectedSpider] = useState<Spider | null>(null)
 
@@ -196,6 +303,7 @@ const SpidersPage = () => {
   const updateMutation = useUpdateSpider()
   const deleteMutation = useDeleteSpider()
   const runMutation = useRunSpider()
+  const createOrGetWorkspaceMutation = useCreateOrGetWorkspace()
 
   const handleSearch = useCallback(() => {
     setSearchKeyword(keyword)
@@ -251,6 +359,25 @@ const SpidersPage = () => {
     }
     catch {
       Toast.notify({ type: 'error', message: '执行失败' })
+    }
+  }
+
+  const handleOnlineEdit = async (spider: Spider) => {
+    try {
+      Toast.notify({ type: 'info', message: '正在启动工作区...' })
+      const workspace = await createOrGetWorkspaceMutation.mutateAsync(spider.id)
+      if (workspace.url) {
+        window.open(workspace.url, '_blank')
+      }
+      else if (workspace.status === 'starting' || workspace.status === 'pending') {
+        Toast.notify({ type: 'info', message: '工作区正在启动中，请稍后再试' })
+      }
+      else {
+        Toast.notify({ type: 'error', message: '工作区未就绪' })
+      }
+    }
+    catch {
+      Toast.notify({ type: 'error', message: '获取工作区失败' })
     }
   }
 
@@ -333,12 +460,25 @@ const SpidersPage = () => {
       },
     },
     createActionColumn<Spider>({
-      width: 140,
+      width: 220,
       actions: [
         {
           icon: RiPlayLine,
           label: '执行',
           onClick: row => handleRun(row),
+        },
+        {
+          icon: RiCodeSSlashLine,
+          label: '在线编辑',
+          onClick: row => handleOnlineEdit(row),
+        },
+        {
+          icon: RiUploadLine,
+          label: '上传脚本',
+          onClick: (row) => {
+            setSelectedSpider(row)
+            setShowUploadModal(true)
+          },
         },
         {
           icon: RiEditLine,
@@ -359,7 +499,7 @@ const SpidersPage = () => {
         },
       ],
     }),
-  ], [formatDateTime])
+  ], [formatDateTime, createOrGetWorkspaceMutation])
 
   return (
     <>
@@ -424,6 +564,14 @@ const SpidersPage = () => {
         isLoading={deleteMutation.isPending}
         title="确认删除"
         content={`确定要删除爬虫 "${selectedSpider?.name}" 吗？`}
+      />
+      <UploadModal
+        isOpen={showUploadModal}
+        onClose={() => {
+          setShowUploadModal(false)
+          setSelectedSpider(null)
+        }}
+        spider={selectedSpider}
       />
     </>
   )

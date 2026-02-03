@@ -1,8 +1,14 @@
+import logging
+
 from sqlalchemy import func, select
 
-from models.crawlhub import Spider
+from models.crawlhub import Spider, ScriptType
 from schemas.crawlhub import SpiderCreate, SpiderUpdate
 from services.base_service import BaseService
+
+from .coder_workspace_service import CoderWorkspaceService
+
+logger = logging.getLogger(__name__)
 
 
 class SpiderService(BaseService):
@@ -41,12 +47,32 @@ class SpiderService(BaseService):
         result = await self.db.execute(query)
         return result.scalar_one_or_none()
 
-    async def create(self, data: SpiderCreate) -> Spider:
-        """创建爬虫"""
+    async def create(self, data: SpiderCreate, create_workspace: bool = True) -> Spider:
+        """创建爬虫
+
+        Args:
+            data: 爬虫创建数据
+            create_workspace: 是否自动创建 Coder 工作区
+        """
         spider = Spider(**data.model_dump())
         self.db.add(spider)
         await self.db.commit()
         await self.db.refresh(spider)
+
+        # 为所有类型的爬虫创建 Coder 工作区
+        if create_workspace:
+            try:
+                workspace_service = CoderWorkspaceService(self.db)
+                # 根据脚本类型确定 source 参数
+                source = "scrapy" if data.script_type == ScriptType.SCRAPY else "empty"
+                await workspace_service.create_workspace_for_spider(spider, source=source)
+                await workspace_service.close()
+                # 刷新 spider 以获取更新后的 workspace 字段
+                await self.db.refresh(spider)
+            except Exception as e:
+                # 工作区创建失败不影响爬虫创建
+                logger.warning(f"Failed to create workspace for spider {spider.id}: {e}")
+
         return spider
 
     async def update(self, spider_id: str, data: SpiderUpdate) -> Spider | None:
@@ -68,6 +94,16 @@ class SpiderService(BaseService):
         spider = await self.get_by_id(spider_id)
         if not spider:
             return False
+
+        # 删除关联的 Coder 工作区
+        if spider.coder_workspace_id:
+            try:
+                workspace_service = CoderWorkspaceService(self.db)
+                await workspace_service.delete_workspace(spider)
+                await workspace_service.close()
+            except Exception as e:
+                # 工作区删除失败不影响爬虫删除
+                logger.warning(f"Failed to delete workspace for spider {spider_id}: {e}")
 
         await self.db.delete(spider)
         await self.db.commit()

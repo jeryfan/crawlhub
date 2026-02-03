@@ -1,4 +1,7 @@
+import json
+
 from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi.responses import StreamingResponse
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from models.engine import get_db
@@ -10,6 +13,7 @@ from schemas.crawlhub import (
 from schemas.platform import PaginatedResponse
 from schemas.response import ApiResponse, MessageResponse
 from services.crawlhub import SpiderService
+from services.crawlhub.spider_runner_service import SpiderRunnerService
 
 router = APIRouter(prefix="/spiders", tags=["CrawlHub - Spiders"])
 
@@ -95,3 +99,27 @@ async def delete_spider(
     if not success:
         raise HTTPException(status_code=404, detail="爬虫不存在")
     return MessageResponse(msg="爬虫删除成功")
+
+
+@router.post("/{spider_id}/test-run")
+async def test_run_spider(
+    spider_id: str,
+    db: AsyncSession = Depends(get_db),
+):
+    """启动测试运行"""
+    service = SpiderService(db)
+    spider = await service.get_by_id(spider_id)
+    if not spider:
+        raise HTTPException(status_code=404, detail="爬虫不存在")
+
+    runner = SpiderRunnerService(db)
+    task = await runner.create_test_task(spider)
+
+    async def event_generator():
+        async for event in runner.run_test(spider, task):
+            yield f"event: {event['event']}\ndata: {json.dumps(event['data'])}\n\n"
+
+    return StreamingResponse(
+        event_generator(),
+        media_type="text/event-stream",
+    )

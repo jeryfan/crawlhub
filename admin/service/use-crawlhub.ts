@@ -3,12 +3,15 @@
  */
 
 import type {
-  CrawlHubProxy,
+  CoderWorkspace,
+  CoderWorkspaceStatusResponse,
   CrawlHubProxiesQueryParams,
+  CrawlHubProxy,
   CrawlHubProxyBatchCreate,
   CrawlHubProxyCreate,
   CrawlHubProxyListResponse,
   CrawlHubProxyUpdate,
+  FileUploadResult,
   Project,
   ProjectCreate,
   ProjectListResponse,
@@ -22,7 +25,9 @@ import type {
   SpiderUpdate,
 } from '@/types/crawlhub'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { del, get, post, put } from './base'
+import { del, get, post, put, upload } from './base'
+import { API_PREFIX, CSRF_COOKIE_NAME, CSRF_HEADER_NAME } from '@/config'
+import Cookies from 'js-cookie'
 
 const NAME_SPACE = 'crawlhub'
 
@@ -216,6 +221,71 @@ export const useCheckCrawlHubProxy = () => {
     onSuccess: (_, id) => {
       queryClient.invalidateQueries({ queryKey: [NAME_SPACE, 'proxies'] })
       queryClient.invalidateQueries({ queryKey: [NAME_SPACE, 'proxies', id] })
+    },
+  })
+}
+
+// ============ Coder Workspace API ============
+
+export const useCreateOrGetWorkspace = () => {
+  return useMutation({
+    mutationFn: (spiderId: string) =>
+      post<CoderWorkspace>(`/crawlhub/spiders/${spiderId}/workspace`, {}),
+  })
+}
+
+export const useWorkspaceStatus = (spiderId: string, enabled: boolean = true) => {
+  return useQuery({
+    queryKey: [NAME_SPACE, 'workspace', spiderId],
+    queryFn: () => get<CoderWorkspaceStatusResponse>(`/crawlhub/spiders/${spiderId}/workspace`),
+    enabled: !!spiderId && enabled,
+    refetchInterval: 10000,
+  })
+}
+
+export const useStartWorkspace = () => {
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationFn: (spiderId: string) =>
+      post(`/crawlhub/spiders/${spiderId}/workspace/start`, {}),
+    onSuccess: (_, spiderId) => {
+      queryClient.invalidateQueries({ queryKey: [NAME_SPACE, 'workspace', spiderId] })
+    },
+  })
+}
+
+export const useStopWorkspace = () => {
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationFn: (spiderId: string) =>
+      post(`/crawlhub/spiders/${spiderId}/workspace/stop`, {}),
+    onSuccess: (_, spiderId) => {
+      queryClient.invalidateQueries({ queryKey: [NAME_SPACE, 'workspace', spiderId] })
+    },
+  })
+}
+
+export const useUploadToWorkspace = () => {
+  return useMutation({
+    mutationFn: ({ spiderId, file, path }: { spiderId: string, file: File, path?: string }) => {
+      return new Promise<FileUploadResult>((resolve, reject) => {
+        const xhr = new XMLHttpRequest()
+        const formData = new FormData()
+        formData.append('file', file)
+        if (path)
+          formData.append('path', path)
+
+        upload(
+          {
+            xhr,
+            data: formData,
+          },
+          false,
+          `/crawlhub/spiders/${spiderId}/workspace/upload`,
+        ).then((res) => {
+          resolve(res as unknown as FileUploadResult)
+        }).catch(reject)
+      })
     },
   })
 }
