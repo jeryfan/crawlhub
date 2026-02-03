@@ -20,6 +20,14 @@ class ProjectType(enum.StrEnum):
     MULTI_FILE = "multi_file"
 
 
+class ProjectSource(enum.StrEnum):
+    """项目来源"""
+    EMPTY = "empty"
+    SCRAPY = "scrapy"
+    GIT = "git"
+    UPLOAD = "upload"
+
+
 class Spider(DefaultFieldsMixin, Base):
     """爬虫定义"""
 
@@ -38,6 +46,11 @@ class Spider(DefaultFieldsMixin, Base):
         EnumText(ProjectType), default=ProjectType.SINGLE_FILE, comment="项目类型"
     )
     entry_point: Mapped[str | None] = mapped_column(String(255), nullable=True, comment="入口点")
+    # Coder 工作区相关
+    source: Mapped[ProjectSource] = mapped_column(
+        EnumText(ProjectSource), default=ProjectSource.EMPTY, comment="项目来源"
+    )
+    git_repo: Mapped[str | None] = mapped_column(String(500), nullable=True, comment="Git 仓库地址")
     coder_workspace_id: Mapped[str | None] = mapped_column(
         String(100), nullable=True, comment="Coder 工作区 ID"
     )

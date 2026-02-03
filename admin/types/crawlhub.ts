@@ -3,6 +3,9 @@
 // Script Type
 export type ScriptType = 'httpx' | 'scrapy' | 'playwright'
 
+// Project Source - 项目来源类型
+export type ProjectSource = 'empty' | 'scrapy' | 'git' | 'upload'
+
 // Project Types
 export type Project = {
   id: string
@@ -49,6 +52,10 @@ export type Spider = {
   project_type: ProjectType
   entry_point: string | null
   config: Record<string, any> | null
+  source: ProjectSource
+  git_repo: string | null
+  coder_workspace_id: string | null
+  coder_workspace_name: string | null
   created_at: string
   updated_at: string
 }
@@ -64,6 +71,8 @@ export type SpiderCreate = {
   project_type?: ProjectType
   entry_point?: string
   config?: Record<string, any>
+  source?: ProjectSource
+  git_repo?: string
 }
 
 export type SpiderUpdate = {
@@ -76,6 +85,8 @@ export type SpiderUpdate = {
   project_type?: ProjectType
   entry_point?: string
   config?: Record<string, any>
+  source?: ProjectSource
+  git_repo?: string
 }
 
 export type SpidersQueryParams = {
@@ -245,6 +256,7 @@ export type CodeSessionSyncResult = {
 
 // Coder Workspace Types
 export type CoderWorkspaceStatus = 'pending' | 'starting' | 'running' | 'stopping' | 'stopped' | 'failed' | 'unknown'
+export type CoderAgentStatus = 'connecting' | 'connected' | 'disconnected' | 'timeout'
 
 export type CoderWorkspace = {
   id: string
@@ -256,8 +268,12 @@ export type CoderWorkspace = {
 
 export type CoderWorkspaceStatusResponse = {
   status: CoderWorkspaceStatus
+  agent_status: CoderAgentStatus | null
   url: string | null
   last_used_at: string | null
+  build_status: string | null
+  build_job: string | null
+  is_ready: boolean
 }
 
 export type FileUploadResult = {

@@ -54,7 +54,11 @@ class CoderWorkspaceService(BaseService):
         return name[:32].rstrip("-")
 
     async def create_workspace_for_spider(
-        self, spider: Spider, source: str = "empty", project_name: str | None = None
+        self,
+        spider: Spider,
+        source: str = "empty",
+        project_name: str | None = None,
+        git_repo: str | None = None,
     ) -> dict:
         """为爬虫创建 Coder 工作区
 
@@ -62,6 +66,7 @@ class CoderWorkspaceService(BaseService):
             spider: 爬虫对象
             source: 项目来源，可选值: empty, scrapy, git, upload
             project_name: 项目名称，默认使用爬虫名称
+            git_repo: Git 仓库地址（当 source=git 时使用）
 
         Returns:
             工作区信息
@@ -82,10 +87,6 @@ class CoderWorkspaceService(BaseService):
             logger.error(f"Failed to get template {self.template_name}: {e}")
             raise
 
-        # 根据脚本类型确定 source 参数
-        if source == "empty" and spider.script_type == ScriptType.SCRAPY:
-            source = "scrapy"
-
         # 生成工作区名称
         workspace_name = self._generate_workspace_name(spider)
 
@@ -94,6 +95,9 @@ class CoderWorkspaceService(BaseService):
             {"name": "source", "value": source},
             {"name": "name", "value": project_name or re.sub(r"[^a-zA-Z0-9_-]", "_", spider.name)},
         ]
+        # 如果是 git 来源，添加仓库地址
+        if source == "git" and git_repo:
+            rich_parameter_values.append({"name": "repo", "value": git_repo})
 
         # 创建工作区
         try:
@@ -133,8 +137,12 @@ class CoderWorkspaceService(BaseService):
         Returns:
             {
                 "status": "pending" | "starting" | "running" | "stopping" | "stopped" | "failed",
+                "agent_status": "connecting" | "connected" | "disconnected" | "timeout" | None,
                 "url": str | None,
                 "last_used_at": str | None,
+                "build_status": str | None,
+                "build_job": str | None,
+                "is_ready": bool,
             }
         """
         workspace = await self.get_workspace(spider)
@@ -159,15 +167,32 @@ class CoderWorkspaceService(BaseService):
         }
         simplified_status = status_map.get(status, "unknown")
 
+        # 获取 agent 状态
+        agent_status = None
+        is_ready = False
+        if simplified_status == "running":
+            try:
+                agents = await self.coder_client.get_workspace_agents(spider.coder_workspace_id)
+                if agents:
+                    agent = agents[0]
+                    agent_status = agent.get("status")
+                    is_ready = agent_status == "connected"
+            except CoderAPIError:
+                pass
+
         # 获取 code-server URL
         url = None
-        if simplified_status == "running":
+        if is_ready:
             url = await self.get_workspace_url(spider)
 
         return {
             "status": simplified_status,
+            "agent_status": agent_status,
             "url": url,
             "last_used_at": workspace.get("last_used_at"),
+            "build_status": status,
+            "build_job": latest_build.get("job", {}).get("status"),
+            "is_ready": is_ready,
         }
 
     async def get_workspace_url(self, spider: Spider) -> str | None:

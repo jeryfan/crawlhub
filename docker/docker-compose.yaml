@@ -188,6 +188,7 @@ x-shared-env: &shared-api-worker-env
 
   # Coder Platform Configuration
   CODER_API_URL: ${CODER_API_URL:-http://coder:7080}
+  CODER_ACCESS_URL: ${CODER_ACCESS_URL:-http://localhost:7080}
   CODER_API_TOKEN: ${CODER_API_TOKEN:-}
   CODER_TEMPLATE_NAME: ${CODER_TEMPLATE_NAME:-spider}
   CODER_DEFAULT_OWNER: ${CODER_DEFAULT_OWNER:-admin}

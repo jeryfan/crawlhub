@@ -2,7 +2,7 @@ import logging
 
 from sqlalchemy import func, select
 
-from models.crawlhub import Spider, ScriptType
+from models.crawlhub import Spider, ScriptType, ProjectSource
 from schemas.crawlhub import SpiderCreate, SpiderUpdate
 from services.base_service import BaseService
 
@@ -63,9 +63,14 @@ class SpiderService(BaseService):
         if create_workspace:
             try:
                 workspace_service = CoderWorkspaceService(self.db)
-                # 根据脚本类型确定 source 参数
-                source = "scrapy" if data.script_type == ScriptType.SCRAPY else "empty"
-                await workspace_service.create_workspace_for_spider(spider, source=source)
+                # 使用 spider 的 source 字段，如果是 scrapy 类型且 source 为 empty，则自动设为 scrapy
+                source = data.source.value if data.source else "empty"
+                if source == "empty" and data.script_type == ScriptType.SCRAPY:
+                    source = "scrapy"
+                git_repo = data.git_repo if data.source == ProjectSource.GIT else None
+                await workspace_service.create_workspace_for_spider(
+                    spider, source=source, git_repo=git_repo
+                )
                 await workspace_service.close()
                 # 刷新 spider 以获取更新后的 workspace 字段
                 await self.db.refresh(spider)

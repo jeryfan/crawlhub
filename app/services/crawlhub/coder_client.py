@@ -25,9 +25,12 @@ class CoderClient:
         self,
         api_url: str | None = None,
         api_token: str | None = None,
+        access_url: str | None = None,
         timeout: float = 30.0,
     ):
         self.api_url = (api_url or os.getenv("CODER_API_URL", "http://localhost:7080")).rstrip("/")
+        # access_url 用于前端访问，默认与 api_url 相同
+        self.access_url = (access_url or os.getenv("CODER_ACCESS_URL", self.api_url)).rstrip("/")
         self.api_token = api_token or os.getenv("CODER_API_TOKEN", "")
         self.timeout = timeout
         self._client: httpx.AsyncClient | None = None
@@ -272,13 +275,13 @@ class CoderClient:
             subdomain: 是否使用子域名模式
 
         Returns:
-            应用访问 URL
+            应用访问 URL（使用 access_url 供前端访问）
         """
         if subdomain:
             # 子域名模式: {app_slug}--{agent_name}--{workspace_name}--{owner}.coder.example.com
             # 这需要配置 wildcard DNS
-            base_domain = self.api_url.replace("http://", "").replace("https://", "")
+            base_domain = self.access_url.replace("http://", "").replace("https://", "")
             return f"http://{app_slug}--{agent_name}--{workspace_name}--{workspace_owner}.{base_domain}"
         else:
-            # 路径模式
-            return f"{self.api_url}/@{workspace_owner}/{workspace_name}.{agent_name}/apps/{app_slug}/"
+            # 路径模式 - 使用 access_url 供前端访问
+            return f"{self.access_url}/@{workspace_owner}/{workspace_name}.{agent_name}/apps/{app_slug}/"

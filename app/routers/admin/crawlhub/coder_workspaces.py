@@ -93,8 +93,12 @@ async def get_workspace_status(
         return ApiResponse(
             data=CoderWorkspaceStatusResponse(
                 status=status["status"],
+                agent_status=status.get("agent_status"),
                 url=status.get("url"),
                 last_used_at=status.get("last_used_at"),
+                build_status=status.get("build_status"),
+                build_job=status.get("build_job"),
+                is_ready=status.get("is_ready", False),
             )
         )
     except CoderAPIError as e:

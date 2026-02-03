@@ -1,17 +1,18 @@
 'use client'
 
 import type { ColumnDef, SortingState } from '@/app/components/base/table'
-import type { ScriptType, Spider, SpiderCreate, SpiderUpdate } from '@/types/crawlhub'
+import type { ProjectSource, ScriptType, Spider, SpiderCreate, SpiderUpdate } from '@/types/crawlhub'
 import {
   RiAddLine,
   RiBugLine,
   RiCloseLine,
-  RiCodeSSlashLine,
   RiDeleteBinLine,
   RiEditLine,
+  RiEyeLine,
   RiPlayLine,
   RiUploadLine,
 } from '@remixicon/react'
+import { useRouter } from 'next/navigation'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import Button from '@/app/components/base/button'
 import Confirm from '@/app/components/base/confirm'
@@ -29,7 +30,6 @@ import Textarea from '@/app/components/base/textarea'
 import Toast from '@/app/components/base/toast'
 import useTimestamp from '@/hooks/use-timestamp'
 import {
-  useCreateOrGetWorkspace,
   useCreateSpider,
   useDeleteSpider,
   useProjects,
@@ -46,6 +46,13 @@ const scriptTypeOptions = [
   { value: 'playwright', name: 'Playwright' },
 ]
 
+const sourceOptions = [
+  { value: 'empty', name: '新建空项目' },
+  { value: 'scrapy', name: '新建 Scrapy 项目' },
+  { value: 'git', name: '克隆 Git 仓库' },
+  { value: 'upload', name: '上传文件' },
+]
+
 type SpiderFormModalProps = {
   isOpen: boolean
   onClose: () => void
@@ -60,6 +67,8 @@ const SpiderFormModal = ({ isOpen, onClose, spiderId, onSubmit, isLoading }: Spi
     name: '',
     description: '',
     script_type: 'httpx',
+    source: 'empty',
+    git_repo: '',
   })
 
   const { data: spiderDetail, isLoading: isLoadingDetail } = useSpider(spiderId || '')
@@ -78,6 +87,8 @@ const SpiderFormModal = ({ isOpen, onClose, spiderId, onSubmit, isLoading }: Spi
           name: spiderDetail.name,
           description: spiderDetail.description || '',
           script_type: spiderDetail.script_type,
+          source: spiderDetail.source || 'empty',
+          git_repo: spiderDetail.git_repo || '',
         })
       }
       else if (!spiderId) {
@@ -86,15 +97,28 @@ const SpiderFormModal = ({ isOpen, onClose, spiderId, onSubmit, isLoading }: Spi
           name: '',
           description: '',
           script_type: 'httpx',
+          source: 'empty',
+          git_repo: '',
         })
       }
     }
   }, [isOpen, spiderDetail, spiderId])
 
+  // 当脚本类型变化时，自动调整 source
+  useEffect(() => {
+    if (!spiderId && formData.script_type === 'scrapy' && formData.source === 'empty') {
+      setFormData(prev => ({ ...prev, source: 'scrapy' }))
+    }
+  }, [formData.script_type, formData.source, spiderId])
+
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault()
     if (!spiderId && !formData.project_id) {
       Toast.notify({ type: 'error', message: '请选择项目' })
+      return
+    }
+    if (formData.source === 'git' && !formData.git_repo) {
+      Toast.notify({ type: 'error', message: '请输入 Git 仓库地址' })
       return
     }
     onSubmit(formData)
@@ -153,6 +177,29 @@ const SpiderFormModal = ({ isOpen, onClose, spiderId, onSubmit, isLoading }: Spi
                     onSelect={item => setFormData({ ...formData, script_type: item.value as ScriptType })}
                   />
                 </div>
+                {!isEditMode && (
+                  <>
+                    <div>
+                      <label className="mb-1.5 block text-sm text-text-secondary">项目来源</label>
+                      <SimpleSelect
+                        className="w-full"
+                        defaultValue={formData.source}
+                        items={sourceOptions}
+                        onSelect={item => setFormData({ ...formData, source: item.value as ProjectSource })}
+                      />
+                    </div>
+                    {formData.source === 'git' && (
+                      <div>
+                        <label className="mb-1.5 block text-sm text-text-secondary">Git 仓库地址</label>
+                        <Input
+                          value={formData.git_repo || ''}
+                          onChange={e => setFormData({ ...formData, git_repo: e.target.value })}
+                          placeholder="https://github.com/user/repo.git"
+                        />
+                      </div>
+                    )}
+                  </>
+                )}
                 <div>
                   <label className="mb-1.5 block text-sm text-text-secondary">描述</label>
                   <Textarea
@@ -278,6 +325,7 @@ const UploadModal = ({ isOpen, onClose, spider }: UploadModalProps) => {
 }
 
 const SpidersPage = () => {
+  const router = useRouter()
   const [page, setPage] = useState(1)
   const [pageSize, setPageSize] = useState(10)
   const [keyword, setKeyword] = useState('')
@@ -303,7 +351,6 @@ const SpidersPage = () => {
   const updateMutation = useUpdateSpider()
   const deleteMutation = useDeleteSpider()
   const runMutation = useRunSpider()
-  const createOrGetWorkspaceMutation = useCreateOrGetWorkspace()
 
   const handleSearch = useCallback(() => {
     setSearchKeyword(keyword)
@@ -362,23 +409,8 @@ const SpidersPage = () => {
     }
   }
 
-  const handleOnlineEdit = async (spider: Spider) => {
-    try {
-      Toast.notify({ type: 'info', message: '正在启动工作区...' })
-      const workspace = await createOrGetWorkspaceMutation.mutateAsync(spider.id)
-      if (workspace.url) {
-        window.open(workspace.url, '_blank')
-      }
-      else if (workspace.status === 'starting' || workspace.status === 'pending') {
-        Toast.notify({ type: 'info', message: '工作区正在启动中，请稍后再试' })
-      }
-      else {
-        Toast.notify({ type: 'error', message: '工作区未就绪' })
-      }
-    }
-    catch {
-      Toast.notify({ type: 'error', message: '获取工作区失败' })
-    }
+  const handleViewDetail = (spider: Spider) => {
+    router.push(`/crawlhub/spiders/${spider.id}`)
   }
 
   const handleSortingChange = useCallback((newSorting: SortingState) => {
@@ -463,14 +495,14 @@ const SpidersPage = () => {
       width: 220,
       actions: [
         {
+          icon: RiEyeLine,
+          label: '详情',
+          onClick: row => handleViewDetail(row),
+        },
+        {
           icon: RiPlayLine,
           label: '执行',
           onClick: row => handleRun(row),
-        },
-        {
-          icon: RiCodeSSlashLine,
-          label: '在线编辑',
-          onClick: row => handleOnlineEdit(row),
         },
         {
           icon: RiUploadLine,
@@ -499,7 +531,7 @@ const SpidersPage = () => {
         },
       ],
     }),
-  ], [formatDateTime, createOrGetWorkspaceMutation])
+  ], [formatDateTime, router])
 
   return (
     <>

@@ -228,18 +228,24 @@ export const useCheckCrawlHubProxy = () => {
 // ============ Coder Workspace API ============
 
 export const useCreateOrGetWorkspace = () => {
+  const queryClient = useQueryClient()
   return useMutation({
     mutationFn: (spiderId: string) =>
       post<CoderWorkspace>(`/crawlhub/spiders/${spiderId}/workspace`, {}),
+    onSuccess: (_, spiderId) => {
+      queryClient.invalidateQueries({ queryKey: [NAME_SPACE, 'workspace', spiderId] })
+      queryClient.invalidateQueries({ queryKey: [NAME_SPACE, 'spiders', spiderId] })
+    },
   })
 }
 
-export const useWorkspaceStatus = (spiderId: string, enabled: boolean = true) => {
+export const useWorkspaceStatus = (spiderId: string, options?: { enabled?: boolean, refetchInterval?: number | false }) => {
+  const { enabled = true, refetchInterval = 5000 } = options || {}
   return useQuery({
     queryKey: [NAME_SPACE, 'workspace', spiderId],
     queryFn: () => get<CoderWorkspaceStatusResponse>(`/crawlhub/spiders/${spiderId}/workspace`),
     enabled: !!spiderId && enabled,
-    refetchInterval: 10000,
+    refetchInterval,
   })
 }
 

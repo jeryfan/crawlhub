@@ -6,6 +6,7 @@ from pydantic import BaseModel
 
 
 WorkspaceStatus = Literal["pending", "starting", "running", "stopping", "stopped", "failed", "unknown"]
+AgentStatus = Literal["connecting", "connected", "disconnected", "timeout"]
 
 
 class CoderWorkspaceResponse(BaseModel):
@@ -22,8 +23,13 @@ class CoderWorkspaceStatusResponse(BaseModel):
     """工作区状态响应"""
 
     status: WorkspaceStatus
+    agent_status: AgentStatus | None = None
     url: str | None = None
     last_used_at: str | None = None
+    # 详细状态信息
+    build_status: str | None = None
+    build_job: str | None = None
+    is_ready: bool = False
 
 
 class FileUploadResponse(BaseModel):
