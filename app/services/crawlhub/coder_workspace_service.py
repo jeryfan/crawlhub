@@ -93,7 +93,7 @@ class CoderWorkspaceService(BaseService):
         # 准备参数
         rich_parameter_values = [
             {"name": "source", "value": source},
-            {"name": "name", "value": project_name or re.sub(r"[^a-zA-Z0-9_-]", "_", spider.name)},
+            {"name": "name", "value": project_name or re.sub(r"[^a-zA-Z0-9_]", "_", spider.name)},
         ]
         # 如果是 git 来源，添加仓库地址
         if source == "git" and git_repo:

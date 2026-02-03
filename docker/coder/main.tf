@@ -62,8 +62,8 @@ data "coder_parameter" "name" {
   default      = "my_project"
   mutable      = false
   validation {
-    regex = "^[a-zA-Z][a-zA-Z0-9_-]*$"
-    error = "项目名必须以字母开头，只能包含字母、数字、下划线、连字符"
+    regex = "^[a-zA-Z][a-zA-Z0-9_]*$"
+    error = "项目名必须以字母开头，只能包含字母、数字、下划线"
   }
 }
 
