@@ -1,6 +1,6 @@
 # Variables
 DOCKER_REGISTRY=jeryfan
-WEB_IMAGE=$(DOCKER_REGISTRY)/web
+ADMIN_IMAGE=$(DOCKER_REGISTRY)/admin
 API_IMAGE=$(DOCKER_REGISTRY)/api
 VERSION=latest
 
@@ -72,9 +72,9 @@ test:
 
 # Build Docker images
 build-web:
-	@echo "Building web Docker image: $(WEB_IMAGE):$(VERSION)..."
-	docker build -t $(WEB_IMAGE):$(VERSION) ./web
-	@echo "Web Docker image built successfully: $(WEB_IMAGE):$(VERSION)"
+	@echo "Building web Docker image: $(ADMIN_IMAGE):$(VERSION)..."
+	docker build -t $(ADMIN_IMAGE):$(VERSION) ./admin
+	@echo "Web Docker image built successfully: $(ADMIN_IMAGE):$(VERSION)"
 
 build-api:
 	@echo "Building API Docker image: $(API_IMAGE):$(VERSION)..."
@@ -82,10 +82,10 @@ build-api:
 	@echo "API Docker image built successfully: $(API_IMAGE):$(VERSION)"
 
 # Push Docker images
-push-web:
-	@echo "Pushing web Docker image: $(WEB_IMAGE):$(VERSION)..."
-	docker push $(WEB_IMAGE):$(VERSION)
-	@echo "Web Docker image pushed successfully: $(WEB_IMAGE):$(VERSION)"
+push-:
+	@echo "Pushing web Docker image: $(ADMIN_IMAGE):$(VERSION)..."
+	docker push $(ADMIN_IMAGE):$(VERSION)
+	@echo "Web Docker image pushed successfully: $(ADMIN_IMAGE):$(VERSION)"
 
 push-api:
 	@echo "Pushing API Docker image: $(API_IMAGE):$(VERSION)..."

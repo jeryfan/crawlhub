@@ -195,12 +195,13 @@ x-shared-env: &shared-api-worker-env
 
 services:
   app:
-    image: app
+    image: jeryfan/api
     container_name: app
     ports:
       - 8000:8000
     networks:
       - one
+      - coder-network
     depends_on:
       db_postgres:
         condition: service_healthy
@@ -218,6 +219,7 @@ services:
       - ./www/:/www/
       - ./keys:/keys
       - /var/run/docker.sock:/var/run/docker.sock
+      - ../app/docker/entrypoint.sh:/entrypoint.sh
     environment:
       <<: *shared-api-worker-env
       MODE: server
@@ -229,7 +231,7 @@ services:
       start_period: 10s
 
   worker:
-    image: app
+    image: jeryfan/api
     container_name: worker
     networks:
       - one
@@ -238,6 +240,7 @@ services:
       - /workspace/.venv
       - ./www/:/www/
       - ./keys:/keys
+      - ../app/docker/entrypoint.sh:/entrypoint.sh
     environment:
       <<: *shared-api-worker-env
       MODE: worker
@@ -245,7 +248,7 @@ services:
     restart: unless-stopped
 
   beat:
-    image: app
+    image: jeryfan/api
     container_name: beat
     networks:
       - one
@@ -254,6 +257,7 @@ services:
       - /workspace/.venv
       - ./www/:/www/
       - ./keys:/keys
+      - ../app/docker/entrypoint.sh:/entrypoint.sh
     environment:
       <<: *shared-api-worker-env
       MODE: beat
@@ -262,7 +266,7 @@ services:
 
   # admin dashboard frontend (访问路径前缀: /platform)
   admin:
-    image: admin
+    image: jeryfan/admin
     restart: always
     environment:
       CONSOLE_API_URL: ${CONSOLE_API_URL:-}
@@ -277,55 +281,5 @@ services:
       NEXT_PUBLIC_ALLOW_UNSAFE_DATA_SCHEME: ${NEXT_PUBLIC_ALLOW_UNSAFE_DATA_SCHEME:-false}
       NEXT_PUBLIC_ENABLE_SINGLE_DOLLAR_LATEX: ${NEXT_PUBLIC_ENABLE_SINGLE_DOLLAR_LATEX:-false}
       PM2_INSTANCES: ${PM2_INSTANCES:-2}
-    networks:
-      - one
-
-  # Coder Platform - 在线开发环境
-  coder:
-    image: ghcr.io/coder/coder:${CODER_VERSION:-latest}
-    container_name: coder
-    profiles:
-      - coder
-    ports:
-      - "${CODER_HTTP_PORT:-7080}:7080"
-    environment:
-      CODER_PG_CONNECTION_URL: "postgresql://${CODER_DB_USER:-coder}:${CODER_DB_PASSWORD:-coderpassword}@coder_db/${CODER_DB_NAME:-coder}?sslmode=disable"
-      CODER_HTTP_ADDRESS: "0.0.0.0:7080"
-      CODER_ACCESS_URL: "${CODER_ACCESS_URL:-http://localhost:7080}"
-      CODER_WILDCARD_ACCESS_URL: "${CODER_WILDCARD_ACCESS_URL:-}"
-      CODER_REDIRECT_TO_ACCESS_URL: "false"
-      CODER_LOG_LEVEL: "${CODER_LOG_LEVEL:-info}"
-      CODER_SWAGGER_ENABLE: "${CODER_SWAGGER_ENABLE:-true}"
-    user: root
-    volumes:
-      - /var/run/docker.sock:/var/run/docker.sock
-      - ./volumes/coder/home:/home/coder
-      - ./volumes/coder/workspace-data:/workspace-data
-    depends_on:
-      coder_db:
-        condition: service_healthy
-    restart: unless-stopped
-    networks:
-      - one
-
-  # Coder Database - Coder 专用 PostgreSQL
-  coder_db:
-    image: postgres:16-alpine
-    container_name: coder_db
-    profiles:
-      - coder
-    restart: always
-    environment:
-      POSTGRES_USER: ${CODER_DB_USER:-coder}
-      POSTGRES_PASSWORD: ${CODER_DB_PASSWORD:-coderpassword}
-      POSTGRES_DB: ${CODER_DB_NAME:-coder}
-    volumes:
-      - ./volumes/coder/postgres-data:/var/lib/postgresql/data
-    healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U ${CODER_DB_USER:-coder} -d ${CODER_DB_NAME:-coder}"]
-      interval: 5s
-      timeout: 5s
-      retries: 5
-      start_period: 10s
     networks:
       - one

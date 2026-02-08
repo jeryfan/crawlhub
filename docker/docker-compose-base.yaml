@@ -222,5 +222,9 @@ services:
 
 networks:
   one:
+    name: one
     driver: bridge
-    external: true
+  coder-network:
+    name: coder-network
+    driver: bridge
+

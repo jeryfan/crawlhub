@@ -97,7 +97,6 @@ def init_app(app: FastAPI) -> Celery:
     imports = [
         "tasks.document_task",
         "tasks.billing_tasks",
-        "tasks.code_session_tasks",
     ]
     day = app_config.CELERY_BEAT_SCHEDULER_TIME
 
@@ -123,11 +122,6 @@ def init_app(app: FastAPI) -> Celery:
         "billing.send_expiry_reminders": {
             "task": "tasks.billing_tasks.send_expiry_reminders",
             "schedule": crontab(minute="0", hour="9"),  # 每天9点发送到期提醒
-        },
-        # Code Session 清理任务
-        "crawlhub.cleanup_code_sessions": {
-            "task": "tasks.code_session_tasks.cleanup_expired_code_sessions",
-            "schedule": crontab(minute="*/5"),  # 每5分钟清理过期会话
         },
     }
 

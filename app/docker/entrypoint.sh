@@ -22,7 +22,7 @@ function start_serve() {
 
 function start_worker() {
   while true; do
- o    exec celery -A app.celery worker --loglevel=info --pool=eventlet --concurrency=1000 &
+    exec celery -A app.celery worker --loglevel=info --pool=eventlet --concurrency=1000 &
     wait -n
   done
 }
