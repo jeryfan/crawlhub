@@ -23,7 +23,7 @@ class CoderWorkspaceService(BaseService):
         super().__init__(db)
         self.coder_client = CoderClient()
         self.template_name = os.getenv("CODER_TEMPLATE_NAME", "spider")
-        self.default_owner = os.getenv("CODER_DEFAULT_OWNER", "admin")
+        self.default_owner = os.getenv("CODER_DEFAULT_OWNER", "me")
 
     async def close(self):
         """关闭客户端连接"""
@@ -223,7 +223,7 @@ class CoderWorkspaceService(BaseService):
                 if agents:
                     agent_name = agents[0].get("name", "main")
                     return self.coder_client.get_app_url(
-                        workspace_owner=self.default_owner,
+                        workspace_owner=workspace.get("owner_name", self.default_owner),
                         workspace_name=workspace["name"],
                         agent_name=agent_name,
                         app_slug=app.get("slug", "code-server"),
