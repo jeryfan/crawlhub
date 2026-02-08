@@ -56,7 +56,7 @@ class CoderWorkspaceService(BaseService):
     async def create_workspace_for_spider(
         self,
         spider: Spider,
-        source: str = "empty",
+        source: str | None = None,
         project_name: str | None = None,
         git_repo: str | None = None,
     ) -> dict:
@@ -64,13 +64,18 @@ class CoderWorkspaceService(BaseService):
 
         Args:
             spider: 爬虫对象
-            source: 项目来源，可选值: empty, scrapy, git, upload
+            source: 项目来源，可选值: empty, scrapy, git, upload。未传时从 spider.source 读取
             project_name: 项目名称，默认使用爬虫名称
-            git_repo: Git 仓库地址（当 source=git 时使用）
+            git_repo: Git 仓库地址（当 source=git 时使用）。未传时从 spider.git_repo 读取
 
         Returns:
             工作区信息
         """
+        # 未传参时从 spider 对象读取
+        if source is None:
+            source = spider.source.value if spider.source else "empty"
+        if git_repo is None:
+            git_repo = spider.git_repo
         # 检查是否已有工作区
         if spider.coder_workspace_id:
             try:
