@@ -240,20 +240,25 @@ class CoderWorkspaceService(BaseService):
         """确保工作区处于运行状态
 
         如果工作区不存在，创建一个；如果已停止，则启动它。
+        重建工作区时，如果有部署快照，会自动恢复代码。
 
         Returns:
             工作区信息
         """
         # 如果没有工作区，先创建
         if not spider.coder_workspace_id:
-            return await self.create_workspace_for_spider(spider)
+            workspace = await self.create_workspace_for_spider(spider)
+            await self._restore_code_if_available(spider)
+            return workspace
 
         workspace = await self.get_workspace(spider)
         if not workspace:
             # 工作区已被删除，重新创建
             spider.coder_workspace_id = None
             spider.coder_workspace_name = None
-            return await self.create_workspace_for_spider(spider)
+            workspace = await self.create_workspace_for_spider(spider)
+            await self._restore_code_if_available(spider)
+            return workspace
 
         # 检查状态
         latest_build = workspace.get("latest_build", {})
@@ -269,6 +274,21 @@ class CoderWorkspaceService(BaseService):
 
         # 返回最新状态
         return await self.coder_client.get_workspace(spider.coder_workspace_id)
+
+    async def _restore_code_if_available(self, spider: Spider) -> None:
+        """如果有部署快照，恢复代码到新建的工作区"""
+        if not spider.active_deployment_id:
+            return
+
+        try:
+            from services.crawlhub.deployment_service import DeploymentService
+
+            deploy_service = DeploymentService(self.db)
+            await deploy_service.restore_to_workspace(spider)
+            logger.info(f"Auto-restored code to workspace for spider {spider.id}")
+        except Exception as e:
+            # 恢复失败不影响工作区创建
+            logger.warning(f"Failed to auto-restore code to workspace for spider {spider.id}: {e}")
 
     async def wait_for_workspace_ready(
         self, workspace_id: str, timeout: int = 120, poll_interval: int = 3

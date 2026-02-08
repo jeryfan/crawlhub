@@ -264,6 +264,7 @@ class CoderClient:
         agent_name: str,
         app_slug: str,
         subdomain: bool = False,
+        internal: bool = False,
     ) -> str:
         """构建应用访问 URL
 
@@ -273,15 +274,17 @@ class CoderClient:
             agent_name: 代理名称
             app_slug: 应用 slug
             subdomain: 是否使用子域名模式
+            internal: 是否使用内部 URL（服务端调用用 api_url，前端访问用 access_url）
 
         Returns:
-            应用访问 URL（使用 access_url 供前端访问）
+            应用访问 URL
         """
+        base_url = self.api_url if internal else self.access_url
         if subdomain:
             # 子域名模式: {app_slug}--{agent_name}--{workspace_name}--{owner}.coder.example.com
             # 这需要配置 wildcard DNS
-            base_domain = self.access_url.replace("http://", "").replace("https://", "")
+            base_domain = base_url.replace("http://", "").replace("https://", "")
             return f"http://{app_slug}--{agent_name}--{workspace_name}--{workspace_owner}.{base_domain}"
         else:
-            # 路径模式 - 使用 access_url 供前端访问
-            return f"{self.access_url}/@{workspace_owner}/{workspace_name}.{agent_name}/apps/{app_slug}/"
+            # 路径模式
+            return f"{base_url}/@{workspace_owner}/{workspace_name}/apps/{app_slug}/"

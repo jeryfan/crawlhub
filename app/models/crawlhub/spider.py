@@ -38,6 +38,10 @@ class Spider(DefaultFieldsMixin, Base):
     coder_workspace_name: Mapped[str | None] = mapped_column(
         String(255), nullable=True, comment="Coder 工作区名称"
     )
+    webhook_url: Mapped[str | None] = mapped_column(String(500), nullable=True, comment="Webhook 回调 URL")
+    active_deployment_id: Mapped[str | None] = mapped_column(
+        StringUUID, nullable=True, comment="当前活跃部署ID"
+    )
 
     def __repr__(self) -> str:
         return f"<Spider {self.name}>"

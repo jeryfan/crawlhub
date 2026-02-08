@@ -221,3 +221,32 @@ async def upload_to_workspace(
         raise HTTPException(status_code=500, detail=f"文件上传失败: {e}")
     finally:
         await workspace_service.close()
+
+
+@router.post("/restore", response_model=MessageResponse)
+async def restore_code_to_workspace(
+    spider_id: str,
+    deployment_id: str | None = None,
+    db: AsyncSession = Depends(get_db),
+):
+    """从部署快照恢复代码到工作区
+
+    如果不指定 deployment_id，使用当前活跃部署。
+    用于工作区重建后手动恢复代码。
+    """
+    spider_service = SpiderService(db)
+    spider = await spider_service.get_by_id(spider_id)
+    if not spider:
+        raise HTTPException(status_code=404, detail="爬虫不存在")
+
+    if not spider.coder_workspace_id:
+        raise HTTPException(status_code=400, detail="工作区不存在")
+
+    from services.crawlhub.deployment_service import DeploymentService
+
+    deploy_service = DeploymentService(db)
+    try:
+        count = await deploy_service.restore_to_workspace(spider, deployment_id)
+        return MessageResponse(msg=f"已恢复 {count} 个文件到工作区")
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))

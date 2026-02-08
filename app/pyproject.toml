@@ -59,6 +59,7 @@ dependencies = [
     "python-alipay-sdk>=3.3.0",
     "psycopg2-binary>=2.9.11",
     "pymysql>=1.1.2",
+    "croniter>=6.0.0",
 ]
 
 

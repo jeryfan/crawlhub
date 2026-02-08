@@ -1,6 +1,7 @@
 import random
 from datetime import datetime
 
+import httpx
 from sqlalchemy import func, select, update
 
 from models.crawlhub import Proxy, ProxyStatus
@@ -96,6 +97,41 @@ class ProxyService(BaseService):
         await self.db.commit()
 
         return selected
+
+    async def check_proxy(self, proxy: Proxy) -> bool:
+        """检测代理可用性，返回是否可用"""
+        import logging
+
+        logger = logging.getLogger(__name__)
+        test_url = "https://httpbin.org/ip"
+        proxy_url = proxy.url
+
+        try:
+            async with httpx.AsyncClient(
+                proxy=proxy_url,
+                timeout=10,
+            ) as client:
+                response = await client.get(test_url)
+                success = response.status_code == 200
+        except Exception as e:
+            logger.debug(f"Proxy check failed for {proxy.host}:{proxy.port}: {e}")
+            success = False
+
+        # 直接更新代理状态（不通过 report_result 避免重复查询和提交）
+        if success:
+            proxy.fail_count = 0
+            proxy.success_rate = min(1.0, proxy.success_rate + 0.01)
+            if proxy.status != ProxyStatus.COOLDOWN:
+                proxy.status = ProxyStatus.ACTIVE
+        else:
+            proxy.fail_count += 1
+            proxy.success_rate = max(0.0, proxy.success_rate - 0.05)
+            if proxy.fail_count >= 3:
+                proxy.status = ProxyStatus.INACTIVE
+
+        proxy.last_check_at = datetime.utcnow()
+
+        return success
 
     async def report_result(self, proxy_id: str, success: bool) -> None:
         """上报代理使用结果"""

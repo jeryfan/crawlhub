@@ -13,6 +13,7 @@ from .coder_workspace import (
     CoderWorkspaceStatusResponse,
     FileUploadResponse,
 )
+from .deployment import DeployRequest, DeploymentResponse, DeploymentListResponse
 
 __all__ = [
     "ProjectCreate",
@@ -34,4 +35,7 @@ __all__ = [
     "CoderWorkspaceResponse",
     "CoderWorkspaceStatusResponse",
     "FileUploadResponse",
+    "DeployRequest",
+    "DeploymentResponse",
+    "DeploymentListResponse",
 ]

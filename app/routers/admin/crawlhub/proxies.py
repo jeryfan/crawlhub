@@ -39,19 +39,6 @@ async def list_proxies(
     )
 
 
-@router.get("/{proxy_id}", response_model=ApiResponse[ProxyResponse])
-async def get_proxy(
-    proxy_id: str,
-    db: AsyncSession = Depends(get_db),
-):
-    """获取代理详情"""
-    service = ProxyService(db)
-    proxy = await service.get_by_id(proxy_id)
-    if not proxy:
-        raise HTTPException(status_code=404, detail="代理不存在")
-    return ApiResponse(data=ProxyResponse.model_validate(proxy))
-
-
 @router.post("", response_model=ApiResponse[ProxyResponse])
 async def create_proxy(
     data: ProxyCreate,
@@ -72,6 +59,28 @@ async def batch_create_proxies(
     service = ProxyService(db)
     count = await service.batch_create(data.proxies)
     return MessageResponse(msg=f"成功创建 {count} 个代理")
+
+
+@router.post("/check-all", response_model=MessageResponse)
+async def check_all_proxies():
+    """检测所有代理可用性（异步）"""
+    from tasks.proxy_tasks import check_all_proxies as check_all_proxies_task
+
+    check_all_proxies_task.delay()
+    return MessageResponse(msg="代理批量检测已提交")
+
+
+@router.get("/{proxy_id}", response_model=ApiResponse[ProxyResponse])
+async def get_proxy(
+    proxy_id: str,
+    db: AsyncSession = Depends(get_db),
+):
+    """获取代理详情"""
+    service = ProxyService(db)
+    proxy = await service.get_by_id(proxy_id)
+    if not proxy:
+        raise HTTPException(status_code=404, detail="代理不存在")
+    return ApiResponse(data=ProxyResponse.model_validate(proxy))
 
 
 @router.put("/{proxy_id}", response_model=ApiResponse[ProxyResponse])
@@ -106,10 +115,14 @@ async def check_proxy(
     proxy_id: str,
     db: AsyncSession = Depends(get_db),
 ):
-    """检测代理可用性"""
+    """检测单个代理可用性"""
     service = ProxyService(db)
     proxy = await service.get_by_id(proxy_id)
     if not proxy:
         raise HTTPException(status_code=404, detail="代理不存在")
-    # TODO: 实现代理检测逻辑
-    return MessageResponse(msg="代理检测完成")
+
+    success = await service.check_proxy(proxy)
+    if success:
+        return MessageResponse(msg="代理可用")
+    else:
+        return MessageResponse(msg="代理不可用")

@@ -18,6 +18,9 @@ class TaskResponse(BaseModel):
     worker_id: str | None
     container_id: str | None
     error_message: str | None
+    trigger_type: str = "manual"
+    retry_count: int = 0
+    max_retries: int = 3
     created_at: datetime
     updated_at: datetime
 

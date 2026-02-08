@@ -14,6 +14,7 @@ class SpiderBase(BaseModel):
     entry_point: str | None = Field(None, description="入口点")
     source: ProjectSource = Field(default=ProjectSource.EMPTY, description="项目来源")
     git_repo: str | None = Field(None, description="Git 仓库地址")
+    webhook_url: str | None = Field(None, max_length=500, description="Webhook 回调 URL")
 
 
 class SpiderCreate(SpiderBase):
@@ -29,6 +30,7 @@ class SpiderUpdate(BaseModel):
     entry_point: str | None = None
     source: ProjectSource | None = None
     git_repo: str | None = None
+    webhook_url: str | None = None
 
 
 class SpiderResponse(SpiderBase):
@@ -36,6 +38,7 @@ class SpiderResponse(SpiderBase):
     project_id: str
     coder_workspace_id: str | None = None
     coder_workspace_name: str | None = None
+    active_deployment_id: str | None = None
     created_at: datetime
     updated_at: datetime
 

@@ -3,14 +3,17 @@
 import type { CoderWorkspaceStatus } from '@/types/crawlhub'
 import {
   RiArrowLeftLine,
+  RiCodeLine,
+  RiDatabase2Line,
   RiExternalLinkLine,
   RiLoader4Line,
   RiPlayLine,
-  RiRefreshLine,
+  RiRocketLine,
   RiStopLine,
+  RiTaskLine,
 } from '@remixicon/react'
 import { useParams, useRouter } from 'next/navigation'
-import { useEffect, useState } from 'react'
+import { useState } from 'react'
 import Button from '@/app/components/base/button'
 import Skeleton from '@/app/components/base/skeleton'
 import Toast from '@/app/components/base/toast'
@@ -21,6 +24,19 @@ import {
   useStopWorkspace,
   useWorkspaceStatus,
 } from '@/service/use-crawlhub'
+import DataTab from './tabs/data-tab'
+import DeploymentsTab from './tabs/deployments-tab'
+import TasksTab from './tabs/tasks-tab'
+import WorkspaceTab from './tabs/workspace-tab'
+
+type TabKey = 'workspace' | 'deployments' | 'tasks' | 'data'
+
+const tabsList: { key: TabKey; label: string; icon: React.ReactNode }[] = [
+  { key: 'workspace', label: '开发', icon: <RiCodeLine className="h-4 w-4" /> },
+  { key: 'deployments', label: '部署', icon: <RiRocketLine className="h-4 w-4" /> },
+  { key: 'tasks', label: '任务', icon: <RiTaskLine className="h-4 w-4" /> },
+  { key: 'data', label: '数据', icon: <RiDatabase2Line className="h-4 w-4" /> },
+]
 
 const statusLabels: Record<CoderWorkspaceStatus, string> = {
   pending: '等待中',
@@ -47,7 +63,7 @@ const SpiderDetailPage = () => {
   const router = useRouter()
   const spiderId = params.id as string
 
-  const [showIframe, setShowIframe] = useState(false)
+  const [activeTab, setActiveTab] = useState<TabKey>('workspace')
 
   const { data: spider, isLoading: isLoadingSpider } = useSpider(spiderId)
   const {
@@ -70,12 +86,6 @@ const SpiderDetailPage = () => {
   const createOrGetWorkspaceMutation = useCreateOrGetWorkspace()
   const startWorkspaceMutation = useStartWorkspace()
   const stopWorkspaceMutation = useStopWorkspace()
-
-  useEffect(() => {
-    if (workspaceStatus?.is_ready && workspaceStatus?.url) {
-      setShowIframe(true)
-    }
-  }, [workspaceStatus?.is_ready, workspaceStatus?.url])
 
   const handleBack = () => {
     router.push('/crawlhub/spiders')
@@ -104,22 +114,11 @@ const SpiderDetailPage = () => {
     try {
       await stopWorkspaceMutation.mutateAsync(spiderId)
       Toast.notify({ type: 'success', message: '正在停止工作区...' })
-      setShowIframe(false)
       refetchStatus()
     }
     catch {
       Toast.notify({ type: 'error', message: '停止失败' })
     }
-  }
-
-  const handleOpenInNewWindow = () => {
-    if (workspaceStatus?.url) {
-      window.open(workspaceStatus.url, '_blank')
-    }
-  }
-
-  const handleRefresh = () => {
-    refetchStatus()
   }
 
   const isOperating = createOrGetWorkspaceMutation.isPending
@@ -158,7 +157,7 @@ const SpiderDetailPage = () => {
 
   return (
     <div className="flex h-full flex-col">
-      {/* Header - 紧凑的顶部栏 */}
+      {/* Header */}
       <div className="mb-3 flex shrink-0 items-center justify-between">
         <div className="flex items-center gap-3">
           <button
@@ -174,13 +173,11 @@ const SpiderDetailPage = () => {
         </div>
 
         <div className="flex items-center gap-2">
-          {/* 工作区状态 */}
+          {/* Workspace status indicator */}
           <div className="flex items-center gap-2 rounded-lg bg-background-section px-3 py-1.5">
-            <span className="text-xs text-text-tertiary">工作区状态:</span>
+            <span className="text-xs text-text-tertiary">工作区:</span>
             {isLoadingStatus && !workspaceStatus
-              ? (
-                  <Skeleton className="h-4 w-12" />
-                )
+              ? <Skeleton className="h-4 w-12" />
               : workspaceStatus
                 ? (
                     <div className="flex items-center gap-1.5">
@@ -193,100 +190,77 @@ const SpiderDetailPage = () => {
                       )}
                     </div>
                   )
-                : (
-                    <span className="text-xs text-text-tertiary">未创建</span>
-                  )}
+                : <span className="text-xs text-text-tertiary">未创建</span>}
           </div>
 
-          <Button
-            variant="secondary-accent"
-            size="small"
-            onClick={handleRefresh}
-            disabled={isLoadingStatus}
-          >
-            <RiRefreshLine className={`mr-1 h-3.5 w-3.5 ${isLoadingStatus ? 'animate-spin' : ''}`} />
-            刷新状态
-          </Button>
-
-          {workspaceStatus?.url && (
-            <Button variant="secondary-accent" size="small" onClick={handleOpenInNewWindow}>
-              <RiExternalLinkLine className="mr-1 h-3.5 w-3.5" />
-              新窗口打开
-            </Button>
-          )}
-
-          {(!workspaceStatus || workspaceStatus.status === 'stopped' || workspaceStatus.status === 'failed') && (
-            <Button
-              variant="primary"
-              size="small"
-              onClick={handleStartWorkspace}
-              loading={isOperating}
-            >
-              <RiPlayLine className="mr-1 h-3.5 w-3.5" />
-              {spider.coder_workspace_id ? '启动' : '创建工作区'}
-            </Button>
-          )}
-
-          {workspaceStatus?.status === 'running' && (
-            <Button
-              variant="secondary"
-              size="small"
-              onClick={handleStopWorkspace}
-              loading={isOperating}
-            >
-              <RiStopLine className="mr-1 h-3.5 w-3.5" />
-              停止工作区
-            </Button>
+          {/* Workspace controls (only on workspace tab) */}
+          {activeTab === 'workspace' && (
+            <>
+              {workspaceStatus?.url && (
+                <Button
+                  variant="secondary-accent"
+                  size="small"
+                  onClick={() => window.open(workspaceStatus.url!, '_blank')}
+                >
+                  <RiExternalLinkLine className="mr-1 h-3.5 w-3.5" />
+                  新窗口
+                </Button>
+              )}
+              {(!workspaceStatus || workspaceStatus.status === 'stopped' || workspaceStatus.status === 'failed') && (
+                <Button variant="primary" size="small" onClick={handleStartWorkspace} loading={isOperating}>
+                  <RiPlayLine className="mr-1 h-3.5 w-3.5" />
+                  {spider.coder_workspace_id ? '启动' : '创建工作区'}
+                </Button>
+              )}
+              {workspaceStatus?.status === 'running' && (
+                <Button variant="secondary" size="small" onClick={handleStopWorkspace} loading={isOperating}>
+                  <RiStopLine className="mr-1 h-3.5 w-3.5" />
+                  停止
+                </Button>
+              )}
+            </>
           )}
         </div>
       </div>
 
-      {/* Coder iframe - 占据剩余空间 */}
-      <div className="flex-1 overflow-hidden rounded-xl border border-divider-subtle">
-        {showIframe && workspaceStatus?.url
-          ? (
-              <iframe
-                src={workspaceStatus.url}
-                className="h-full w-full border-0"
-                title="Coder Workspace"
-                allow="clipboard-read; clipboard-write"
-              />
-            )
-          : (
-              <div className="flex h-full flex-col items-center justify-center bg-background-section">
-                {workspaceStatus?.status === 'starting' || workspaceStatus?.status === 'pending'
-                  ? (
-                      <>
-                        <RiLoader4Line className="h-10 w-10 animate-spin text-text-quaternary" />
-                        <p className="mt-3 text-sm text-text-secondary">工作区正在启动中...</p>
-                        <p className="mt-1 text-xs text-text-tertiary">首次启动可能需要几分钟</p>
-                      </>
-                    )
-                  : workspaceStatus?.status === 'running' && !workspaceStatus?.is_ready
-                    ? (
-                        <>
-                          <RiLoader4Line className="h-10 w-10 animate-spin text-text-quaternary" />
-                          <p className="mt-3 text-sm text-text-secondary">正在初始化开发环境...</p>
-                          <p className="mt-1 text-xs text-text-tertiary">安装依赖和配置环境中</p>
-                        </>
-                      )
-                    : (
-                        <>
-                          <div className="mb-4 rounded-lg bg-background-default-dimm p-4 text-center">
-                            <p className="text-xs text-text-tertiary">
-                              {sourceLabels[spider.source] || spider.source}
-                              {spider.git_repo && ` · ${spider.git_repo}`}
-                            </p>
-                          </div>
-                          <p className="text-text-tertiary">工作区未启动</p>
-                          <Button variant="primary" onClick={handleStartWorkspace} className="mt-3" loading={isOperating}>
-                            <RiPlayLine className="mr-1 h-4 w-4" />
-                            {spider.coder_workspace_id ? '启动工作区' : '创建工作区'}
-                          </Button>
-                        </>
-                      )}
-              </div>
-            )}
+      {/* Tabs */}
+      <div className="mb-3 flex shrink-0 gap-1 border-b border-divider-subtle">
+        {tabsList.map(tab => (
+          <button
+            key={tab.key}
+            onClick={() => setActiveTab(tab.key)}
+            className={`flex items-center gap-1.5 border-b-2 px-4 py-2 text-sm font-medium transition-colors ${
+              activeTab === tab.key
+                ? 'border-text-accent text-text-accent'
+                : 'border-transparent text-text-tertiary hover:text-text-secondary'
+            }`}
+          >
+            {tab.icon}
+            {tab.label}
+          </button>
+        ))}
+      </div>
+
+      {/* Tab Content */}
+      <div className="min-h-0 flex-1">
+        {activeTab === 'workspace' && (
+          <WorkspaceTab
+            spider={spider}
+            workspaceStatus={workspaceStatus}
+            isLoadingStatus={isLoadingStatus}
+            onStartWorkspace={handleStartWorkspace}
+            isOperating={isOperating}
+          />
+        )}
+        {activeTab === 'deployments' && (
+          <DeploymentsTab spiderId={spiderId} spider={spider} />
+        )}
+        {activeTab === 'tasks' && (
+          <TasksTab spiderId={spiderId} />
+        )}
+        {activeTab === 'data' && (
+          <DataTab spiderId={spiderId} />
+        )}
       </div>
     </div>
   )

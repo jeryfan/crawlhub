@@ -97,6 +97,8 @@ def init_app(app: FastAPI) -> Celery:
     imports = [
         "tasks.document_task",
         "tasks.billing_tasks",
+        "tasks.spider_tasks",
+        "tasks.proxy_tasks",
     ]
     day = app_config.CELERY_BEAT_SCHEDULER_TIME
 
@@ -122,6 +124,20 @@ def init_app(app: FastAPI) -> Celery:
         "billing.send_expiry_reminders": {
             "task": "tasks.billing_tasks.send_expiry_reminders",
             "schedule": crontab(minute="0", hour="9"),  # 每天9点发送到期提醒
+        },
+        # 爬虫定时调度
+        "crawlhub.run_scheduled_spiders": {
+            "task": "tasks.spider_tasks.run_scheduled_spiders",
+            "schedule": crontab(minute="*"),  # 每分钟检查一次
+        },
+        # 代理健康检查
+        "crawlhub.check_all_proxies": {
+            "task": "tasks.proxy_tasks.check_all_proxies",
+            "schedule": crontab(minute="*/5"),  # 每5分钟检查
+        },
+        "crawlhub.reset_cooldown_proxies": {
+            "task": "tasks.proxy_tasks.reset_cooldown_proxies",
+            "schedule": crontab(minute="*"),  # 每分钟重置冷却
         },
     }
 

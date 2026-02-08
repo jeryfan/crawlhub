@@ -123,3 +123,20 @@ async def test_run_spider(
         event_generator(),
         media_type="text/event-stream",
     )
+
+
+@router.post("/{spider_id}/run", response_model=MessageResponse)
+async def run_spider(
+    spider_id: str,
+    db: AsyncSession = Depends(get_db),
+):
+    """手动触发爬虫执行（走 Celery 队列）"""
+    from tasks.spider_tasks import execute_spider
+
+    service = SpiderService(db)
+    spider = await service.get_by_id(spider_id)
+    if not spider:
+        raise HTTPException(status_code=404, detail="爬虫不存在")
+
+    execute_spider.delay(spider_id, trigger_type="manual")
+    return MessageResponse(msg="任务已提交到执行队列")

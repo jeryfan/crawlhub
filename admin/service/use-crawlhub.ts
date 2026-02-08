@@ -11,6 +11,13 @@ import type {
   CrawlHubProxyCreate,
   CrawlHubProxyListResponse,
   CrawlHubProxyUpdate,
+  CrawlHubTask,
+  DataListResponse,
+  DataPreviewResponse,
+  DataQueryParams,
+  Deployment,
+  DeploymentListResponse,
+  DeployRequest,
   FileUploadResult,
   Project,
   ProjectCreate,
@@ -23,6 +30,9 @@ import type {
   SpidersQueryParams,
   SpiderTemplate,
   SpiderUpdate,
+  TaskListResponse,
+  TaskLog,
+  TasksQueryParams,
 } from '@/types/crawlhub'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { del, get, post, put, upload } from './base'
@@ -292,6 +302,116 @@ export const useUploadToWorkspace = () => {
           resolve(res as unknown as FileUploadResult)
         }).catch(reject)
       })
+    },
+  })
+}
+
+// ============ Deployments API ============
+
+export const useDeployments = (spiderId: string, params?: { page?: number; page_size?: number }) => {
+  return useQuery({
+    queryKey: [NAME_SPACE, 'deployments', spiderId, params],
+    queryFn: () => get<DeploymentListResponse>(`/crawlhub/spiders/${spiderId}/deployments`, { params }),
+    enabled: !!spiderId,
+  })
+}
+
+export const useDeployFromWorkspace = () => {
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationFn: ({ spiderId, data }: { spiderId: string; data?: DeployRequest }) =>
+      post<Deployment>(`/crawlhub/spiders/${spiderId}/deployments`, { body: data || {} }),
+    onSuccess: (_, variables) => {
+      queryClient.invalidateQueries({ queryKey: [NAME_SPACE, 'deployments', variables.spiderId] })
+      queryClient.invalidateQueries({ queryKey: [NAME_SPACE, 'spiders', variables.spiderId] })
+    },
+  })
+}
+
+export const useRollbackDeployment = () => {
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationFn: ({ spiderId, deploymentId }: { spiderId: string; deploymentId: string }) =>
+      post<Deployment>(`/crawlhub/spiders/${spiderId}/deployments/${deploymentId}/rollback`, {}),
+    onSuccess: (_, variables) => {
+      queryClient.invalidateQueries({ queryKey: [NAME_SPACE, 'deployments', variables.spiderId] })
+      queryClient.invalidateQueries({ queryKey: [NAME_SPACE, 'spiders', variables.spiderId] })
+    },
+  })
+}
+
+export const useRestoreWorkspace = () => {
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationFn: ({ spiderId, deploymentId }: { spiderId: string; deploymentId?: string }) =>
+      post(`/crawlhub/spiders/${spiderId}/workspace/restore`, {
+        body: deploymentId ? { deployment_id: deploymentId } : {},
+      }),
+    onSuccess: (_, variables) => {
+      queryClient.invalidateQueries({ queryKey: [NAME_SPACE, 'workspace', variables.spiderId] })
+    },
+  })
+}
+
+// ============ Tasks API ============
+
+export const useTasks = (params?: TasksQueryParams) => {
+  return useQuery({
+    queryKey: [NAME_SPACE, 'tasks', params],
+    queryFn: () => get<TaskListResponse>(`/crawlhub/tasks`, { params }),
+  })
+}
+
+export const useTask = (taskId: string) => {
+  return useQuery({
+    queryKey: [NAME_SPACE, 'tasks', taskId],
+    queryFn: () => get<CrawlHubTask>(`/crawlhub/tasks/${taskId}`),
+    enabled: !!taskId,
+  })
+}
+
+export const useTaskLogs = (taskId: string) => {
+  return useQuery({
+    queryKey: [NAME_SPACE, 'tasks', taskId, 'logs'],
+    queryFn: () => get<TaskLog>(`/crawlhub/tasks/${taskId}/logs`),
+    enabled: !!taskId,
+  })
+}
+
+export const useCancelTask = () => {
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationFn: (taskId: string) => post(`/crawlhub/tasks/${taskId}/cancel`, {}),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: [NAME_SPACE, 'tasks'] })
+    },
+  })
+}
+
+// ============ Data API ============
+
+export const useSpiderData = (params?: DataQueryParams) => {
+  return useQuery({
+    queryKey: [NAME_SPACE, 'data', params],
+    queryFn: () => get<DataListResponse>(`/crawlhub/data`, { params }),
+  })
+}
+
+export const useDataPreview = (taskId: string) => {
+  return useQuery({
+    queryKey: [NAME_SPACE, 'data', 'preview', taskId],
+    queryFn: () => get<DataPreviewResponse>(`/crawlhub/data/preview/${taskId}`),
+    enabled: !!taskId,
+  })
+}
+
+export const useDeleteData = () => {
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationFn: (params: { spider_id?: string; task_id?: string }) =>
+      del(`/crawlhub/data?${new URLSearchParams(params as Record<string, string>).toString()}`),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: [NAME_SPACE, 'data'] })
     },
   })
 }

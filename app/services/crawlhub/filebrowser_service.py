@@ -57,11 +57,12 @@ class FileBrowserService:
                 if agents:
                     agent_name = agents[0].get("name", "main")
                     return self.coder_client.get_app_url(
-                        workspace_owner=self.default_owner,
+                        workspace_owner=workspace.get("owner_name", self.default_owner),
                         workspace_name=workspace["name"],
                         agent_name=agent_name,
                         app_slug="filebrowser",
                         subdomain=app.get("subdomain", False),
+                        internal=True,
                     )
         return None
 
@@ -149,6 +150,151 @@ class FileBrowserService:
                     )
             except httpx.RequestError as e:
                 raise FileBrowserError(f"Login request failed: {e}") from e
+
+    async def list_directory(
+        self,
+        filebrowser_url: str,
+        token: str,
+        remote_path: str = "/",
+    ) -> list[dict]:
+        """列出目录内容
+
+        Args:
+            filebrowser_url: FileBrowser 基础 URL
+            token: FileBrowser JWT token
+            remote_path: 远程目录路径
+
+        Returns:
+            文件/目录列表，每项包含 path, name, size, isDir, type
+        """
+        if not remote_path.startswith("/"):
+            remote_path = "/" + remote_path
+
+        url = f"{filebrowser_url.rstrip('/')}/api/resources{remote_path}"
+
+        async with httpx.AsyncClient(timeout=30.0) as client:
+            try:
+                response = await client.get(
+                    url,
+                    headers={
+                        "X-Auth": token,
+                        "Coder-Session-Token": self.coder_client.api_token,
+                    },
+                    follow_redirects=True,
+                )
+                if response.status_code == 200:
+                    data = response.json()
+                    return data.get("items", [])
+                else:
+                    logger.error(f"Failed to list {remote_path}: {response.status_code}")
+                    return []
+            except httpx.RequestError as e:
+                logger.error(f"List request failed for {remote_path}: {e}")
+                return []
+
+    async def download_file(
+        self,
+        filebrowser_url: str,
+        token: str,
+        remote_path: str,
+    ) -> bytes | None:
+        """下载单个文件
+
+        Args:
+            filebrowser_url: FileBrowser 基础 URL
+            token: FileBrowser JWT token
+            remote_path: 远程文件路径
+
+        Returns:
+            文件内容或 None
+        """
+        if not remote_path.startswith("/"):
+            remote_path = "/" + remote_path
+
+        url = f"{filebrowser_url.rstrip('/')}/api/raw{remote_path}"
+
+        async with httpx.AsyncClient(timeout=60.0) as client:
+            try:
+                response = await client.get(
+                    url,
+                    headers={
+                        "X-Auth": token,
+                        "Coder-Session-Token": self.coder_client.api_token,
+                    },
+                    follow_redirects=True,
+                )
+                if response.status_code == 200:
+                    return response.content
+                else:
+                    logger.error(f"Failed to download {remote_path}: {response.status_code}")
+                    return None
+            except httpx.RequestError as e:
+                logger.error(f"Download request failed for {remote_path}: {e}")
+                return None
+
+    async def download_project(
+        self,
+        workspace: dict,
+        project_path: str,
+        timeout: int = 60,
+    ) -> dict[str, bytes]:
+        """递归下载整个项目目录
+
+        Args:
+            workspace: 工作区信息字典
+            project_path: 项目在工作区内的路径（如 /workspace/my_spider）
+            timeout: 等待 FileBrowser 就绪的超时时间（秒）
+
+        Returns:
+            {相对路径: 文件内容} 字典
+        """
+        workspace_id = workspace.get("id")
+
+        filebrowser_url = await self._wait_for_filebrowser_ready(workspace_id, timeout=timeout)
+        if not filebrowser_url:
+            raise FileBrowserError(f"FileBrowser not ready for workspace {workspace_id}")
+
+        token = await self.login(filebrowser_url)
+
+        files: dict[str, bytes] = {}
+        await self._download_recursive(
+            filebrowser_url, token, project_path, project_path, files
+        )
+        return files
+
+    async def _download_recursive(
+        self,
+        filebrowser_url: str,
+        token: str,
+        base_path: str,
+        current_path: str,
+        files: dict[str, bytes],
+    ) -> None:
+        """递归下载目录"""
+        items = await self.list_directory(filebrowser_url, token, current_path)
+
+        for item in items:
+            item_path = item.get("path", "")
+            if not item_path:
+                continue
+
+            # 跳过隐藏文件和 __pycache__
+            name = item.get("name", "")
+            if name.startswith(".") or name == "__pycache__" or name == ".venv":
+                continue
+
+            if item.get("isDir"):
+                await self._download_recursive(
+                    filebrowser_url, token, base_path, item_path, files
+                )
+            else:
+                content = await self.download_file(filebrowser_url, token, item_path)
+                if content is not None:
+                    # 转为相对路径
+                    rel_path = item_path
+                    if rel_path.startswith(base_path):
+                        rel_path = rel_path[len(base_path):].lstrip("/")
+                    files[rel_path] = content
 
     async def upload_file(
         self,

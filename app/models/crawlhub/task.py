@@ -36,6 +36,9 @@ class SpiderTask(DefaultFieldsMixin, Base):
     container_id: Mapped[str | None] = mapped_column(String(100), nullable=True, comment="容器ID")
     error_message: Mapped[str | None] = mapped_column(Text, nullable=True, comment="错误信息")
     is_test: Mapped[bool] = mapped_column(Boolean, default=False, comment="是否为测试运行")
+    trigger_type: Mapped[str] = mapped_column(String(20), default="manual", comment="触发类型: manual/schedule")
+    retry_count: Mapped[int] = mapped_column(Integer, default=0, comment="已重试次数")
+    max_retries: Mapped[int] = mapped_column(Integer, default=3, comment="最大重试次数")
 
     def __repr__(self) -> str:
         return f"<SpiderTask {self.id} status={self.status}>"

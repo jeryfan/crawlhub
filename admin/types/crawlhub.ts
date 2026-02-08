@@ -50,6 +50,8 @@ export type Spider = {
   git_repo: string | null
   coder_workspace_id: string | null
   coder_workspace_name: string | null
+  active_deployment_id: string | null
+  webhook_url: string | null
   created_at: string
   updated_at: string
 }
@@ -115,6 +117,10 @@ export type CrawlHubTask = {
   worker_id: string | null
   container_id: string | null
   error_message: string | null
+  is_test: boolean
+  trigger_type: string
+  retry_count: number
+  max_retries: number
   created_at: string
   updated_at: string
 }
@@ -213,4 +219,66 @@ export type FileUploadResult = {
   files_count: number
   uploaded_files: string[]
   errors?: string[]
+}
+
+// Deployment Types
+export type DeploymentStatus = 'active' | 'archived'
+
+export type Deployment = {
+  id: string
+  spider_id: string
+  version: number
+  status: DeploymentStatus
+  entry_point: string | null
+  file_count: number
+  archive_size: number
+  deploy_note: string | null
+  created_at: string
+  updated_at: string
+}
+
+export type DeploymentListResponse = {
+  items: Deployment[]
+  total: number
+  page: number
+  page_size: number
+  total_pages: number
+}
+
+export type DeployRequest = {
+  deploy_note?: string
+}
+
+// Data Types
+export type DataQueryParams = {
+  spider_id?: string
+  task_id?: string
+  is_test?: boolean
+  page?: number
+  page_size?: number
+}
+
+export type DataListResponse = {
+  items: Record<string, any>[]
+  total: number
+  page: number
+  page_size: number
+  total_pages: number
+}
+
+export type DataPreviewResponse = {
+  items: Record<string, any>[]
+  total: number
+  field_stats: Record<string, {
+    type: string
+    non_null_count: number
+    sample: any
+  }>
+}
+
+// Task Log Types
+export type TaskLog = {
+  stdout: string
+  stderr: string
+  message?: string
 }
