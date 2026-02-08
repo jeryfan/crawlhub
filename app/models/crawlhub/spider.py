@@ -42,6 +42,9 @@ class Spider(DefaultFieldsMixin, Base):
     active_deployment_id: Mapped[str | None] = mapped_column(
         StringUUID, nullable=True, comment="当前活跃部署ID"
     )
+    code_sync_status: Mapped[str | None] = mapped_column(
+        String(20), nullable=True, comment="代码同步状态: syncing/synced/failed"
+    )
 
     def __repr__(self) -> str:
         return f"<Spider {self.name}>"

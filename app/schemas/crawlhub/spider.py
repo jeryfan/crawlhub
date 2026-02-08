@@ -39,6 +39,7 @@ class SpiderResponse(SpiderBase):
     coder_workspace_id: str | None = None
     coder_workspace_name: str | None = None
     active_deployment_id: str | None = None
+    code_sync_status: str | None = None
     created_at: datetime
     updated_at: datetime
 

@@ -43,15 +43,22 @@ const WorkspaceTab = ({ spider, workspaceStatus, isLoadingStatus, onStartWorkspa
           )
         : (
             <div className="flex h-full flex-col items-center justify-center bg-background-section">
-              {workspaceStatus?.status === 'starting' || workspaceStatus?.status === 'pending'
+              {workspaceStatus?.status === 'stopping'
                 ? (
                     <>
                       <RiLoader4Line className="h-10 w-10 animate-spin text-text-quaternary" />
-                      <p className="mt-3 text-sm text-text-secondary">工作区正在启动中...</p>
-                      <p className="mt-1 text-xs text-text-tertiary">首次启动可能需要几分钟</p>
+                      <p className="mt-3 text-sm text-text-secondary">工作区正在停止中...</p>
                     </>
                   )
-                : workspaceStatus?.status === 'running' && !workspaceStatus?.is_ready
+                : workspaceStatus?.status === 'starting' || workspaceStatus?.status === 'pending'
+                  ? (
+                      <>
+                        <RiLoader4Line className="h-10 w-10 animate-spin text-text-quaternary" />
+                        <p className="mt-3 text-sm text-text-secondary">工作区正在启动中...</p>
+                        <p className="mt-1 text-xs text-text-tertiary">首次启动可能需要几分钟</p>
+                      </>
+                    )
+                : workspaceStatus?.status === 'running' && workspaceStatus?.agent_status !== 'connected'
                   ? (
                       <>
                         <RiLoader4Line className="h-10 w-10 animate-spin text-text-quaternary" />
@@ -59,21 +66,37 @@ const WorkspaceTab = ({ spider, workspaceStatus, isLoadingStatus, onStartWorkspa
                         <p className="mt-1 text-xs text-text-tertiary">安装依赖和配置环境中</p>
                       </>
                     )
-                  : (
-                      <>
-                        <div className="mb-4 rounded-lg bg-background-default-dimm p-4 text-center">
-                          <p className="text-xs text-text-tertiary">
-                            {sourceLabels[spider.source] || spider.source}
-                            {spider.git_repo && ` · ${spider.git_repo}`}
-                          </p>
-                        </div>
-                        <p className="text-text-tertiary">工作区未启动</p>
-                        <Button variant="primary" onClick={onStartWorkspace} className="mt-3" loading={isOperating}>
-                          <RiPlayLine className="mr-1 h-4 w-4" />
-                          {spider.coder_workspace_id ? '启动工作区' : '创建工作区'}
-                        </Button>
-                      </>
-                    )}
+                  : workspaceStatus?.status === 'running' && workspaceStatus?.agent_status === 'connected' && !workspaceStatus?.apps_ready
+                    ? (
+                        <>
+                          <RiLoader4Line className="h-10 w-10 animate-spin text-text-quaternary" />
+                          <p className="mt-3 text-sm text-text-secondary">应用服务启动中...</p>
+                          <p className="mt-1 text-xs text-text-tertiary">等待 code-server 就绪</p>
+                        </>
+                      )
+                    : workspaceStatus?.status === 'running' && workspaceStatus?.apps_ready && workspaceStatus?.code_sync_status === 'syncing'
+                      ? (
+                          <>
+                            <RiLoader4Line className="h-10 w-10 animate-spin text-text-quaternary" />
+                            <p className="mt-3 text-sm text-text-secondary">代码同步中...</p>
+                            <p className="mt-1 text-xs text-text-tertiary">正在从部署快照恢复代码</p>
+                          </>
+                        )
+                      : (
+                          <>
+                            <div className="mb-4 rounded-lg bg-background-default-dimm p-4 text-center">
+                              <p className="text-xs text-text-tertiary">
+                                {sourceLabels[spider.source] || spider.source}
+                                {spider.git_repo && ` · ${spider.git_repo}`}
+                              </p>
+                            </div>
+                            <p className="text-text-tertiary">工作区未启动</p>
+                            <Button variant="primary" onClick={onStartWorkspace} className="mt-3" loading={isOperating}>
+                              <RiPlayLine className="mr-1 h-4 w-4" />
+                              {spider.coder_workspace_id ? '启动工作区' : '创建工作区'}
+                            </Button>
+                          </>
+                        )}
             </div>
           )}
     </div>

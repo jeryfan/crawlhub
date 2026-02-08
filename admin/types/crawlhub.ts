@@ -51,6 +51,7 @@ export type Spider = {
   coder_workspace_id: string | null
   coder_workspace_name: string | null
   active_deployment_id: string | null
+  code_sync_status: string | null
   webhook_url: string | null
   created_at: string
   updated_at: string
@@ -212,6 +213,8 @@ export type CoderWorkspaceStatusResponse = {
   build_status: string | null
   build_job: string | null
   is_ready: boolean
+  apps_ready: boolean
+  code_sync_status: string | null
 }
 
 export type FileUploadResult = {

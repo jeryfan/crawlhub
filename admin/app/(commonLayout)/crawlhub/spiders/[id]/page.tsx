@@ -79,6 +79,8 @@ const SpiderDetailPage = () => {
         return 2000
       if (data.status === 'running' && !data.is_ready)
         return 2000
+      if (data.code_sync_status === 'syncing')
+        return 2000
       return 10000
     },
   })
@@ -183,9 +185,14 @@ const SpiderDetailPage = () => {
                     <div className="flex items-center gap-1.5">
                       <span className={`h-2 w-2 rounded-full ${statusColors[workspaceStatus.status]}`} />
                       <span className="text-xs font-medium text-text-primary">
-                        {statusLabels[workspaceStatus.status]}
+                        {workspaceStatus.status === 'running' && !workspaceStatus.is_ready
+                          ? workspaceStatus.code_sync_status === 'syncing'
+                            ? '同步中'
+                            : '初始化中'
+                          : statusLabels[workspaceStatus.status]}
                       </span>
-                      {(workspaceStatus.status === 'starting' || workspaceStatus.status === 'stopping') && (
+                      {(workspaceStatus.status === 'starting' || workspaceStatus.status === 'stopping'
+                        || (workspaceStatus.status === 'running' && !workspaceStatus.is_ready)) && (
                         <RiLoader4Line className="h-3 w-3 animate-spin text-text-tertiary" />
                       )}
                     </div>

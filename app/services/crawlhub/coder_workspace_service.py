@@ -148,6 +148,8 @@ class CoderWorkspaceService(BaseService):
                 "build_status": str | None,
                 "build_job": str | None,
                 "is_ready": bool,
+                "apps_ready": bool,
+                "code_sync_status": str | None,
             }
         """
         workspace = await self.get_workspace(spider)
@@ -174,16 +176,31 @@ class CoderWorkspaceService(BaseService):
 
         # 获取 agent 状态
         agent_status = None
-        is_ready = False
+        agent_connected = False
+        apps_ready = False
         if simplified_status == "running":
             try:
                 agents = await self.coder_client.get_workspace_agents(spider.coder_workspace_id)
                 if agents:
                     agent = agents[0]
                     agent_status = agent.get("status")
-                    is_ready = agent_status == "connected"
+                    agent_connected = agent_status == "connected"
+
+                    # 检查 code-server 应用健康状态
+                    if agent_connected:
+                        apps = await self.coder_client.get_workspace_apps(spider.coder_workspace_id)
+                        for app in apps:
+                            if app.get("slug") == "code-server" or "code" in app.get("slug", "").lower():
+                                apps_ready = app.get("health") == "healthy"
+                                break
             except CoderAPIError:
                 pass
+
+        # code_sync_status
+        code_sync_status = spider.code_sync_status
+
+        # is_ready: agent connected AND apps ready AND not syncing
+        is_ready = agent_connected and apps_ready and code_sync_status != "syncing"
 
         # 获取 code-server URL
         url = None
@@ -198,6 +215,8 @@ class CoderWorkspaceService(BaseService):
             "build_status": status,
             "build_job": latest_build.get("job", {}).get("status"),
             "is_ready": is_ready,
+            "apps_ready": apps_ready,
+            "code_sync_status": code_sync_status,
         }
 
     async def get_workspace_url(self, spider: Spider) -> str | None:
@@ -281,12 +300,20 @@ class CoderWorkspaceService(BaseService):
             return
 
         try:
+            spider.code_sync_status = "syncing"
+            await self.db.commit()
+
             from services.crawlhub.deployment_service import DeploymentService
 
             deploy_service = DeploymentService(self.db)
             await deploy_service.restore_to_workspace(spider)
+
+            spider.code_sync_status = "synced"
+            await self.db.commit()
             logger.info(f"Auto-restored code to workspace for spider {spider.id}")
         except Exception as e:
+            spider.code_sync_status = "failed"
+            await self.db.commit()
             # 恢复失败不影响工作区创建
             logger.warning(f"Failed to auto-restore code to workspace for spider {spider.id}: {e}")
 

@@ -99,6 +99,8 @@ async def get_workspace_status(
                 build_status=status.get("build_status"),
                 build_job=status.get("build_job"),
                 is_ready=status.get("is_ready", False),
+                apps_ready=status.get("apps_ready", False),
+                code_sync_status=status.get("code_sync_status"),
             )
         )
     except CoderAPIError as e:
@@ -246,7 +248,20 @@ async def restore_code_to_workspace(
 
     deploy_service = DeploymentService(db)
     try:
+        spider.code_sync_status = "syncing"
+        await db.commit()
+
         count = await deploy_service.restore_to_workspace(spider, deployment_id)
+
+        spider.code_sync_status = "synced"
+        await db.commit()
+
         return MessageResponse(msg=f"已恢复 {count} 个文件到工作区")
     except ValueError as e:
+        spider.code_sync_status = "failed"
+        await db.commit()
         raise HTTPException(status_code=400, detail=str(e))
+    except Exception as e:
+        spider.code_sync_status = "failed"
+        await db.commit()
+        raise HTTPException(status_code=500, detail=f"恢复失败: {e}")

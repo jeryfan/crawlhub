@@ -30,6 +30,8 @@ class CoderWorkspaceStatusResponse(BaseModel):
     build_status: str | None = None
     build_job: str | None = None
     is_ready: bool = False
+    apps_ready: bool = False
+    code_sync_status: str | None = None
 
 
 class FileUploadResponse(BaseModel):
