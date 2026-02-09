@@ -132,6 +132,26 @@ const TasksTab = ({ spiderId }: TasksTabProps) => {
       ),
     },
     {
+      id: 'progress',
+      header: '进度',
+      size: 120,
+      cell: ({ row }) => {
+        const task = row.original
+        if (task.status !== 'running' && task.progress === 0) return <span className="text-xs text-text-tertiary">-</span>
+        return (
+          <div className="flex items-center gap-2">
+            <div className="h-1.5 w-16 rounded-full bg-background-section">
+              <div
+                className="h-full rounded-full bg-util-colors-blue-blue-500 transition-all"
+                style={{ width: `${Math.min(100, task.progress)}%` }}
+              />
+            </div>
+            <span className="text-xs text-text-secondary">{task.progress}%</span>
+          </div>
+        )
+      },
+    },
+    {
       id: 'counts',
       header: '数据量',
       size: 140,
@@ -168,16 +188,32 @@ const TasksTab = ({ spiderId }: TasksTabProps) => {
     {
       id: 'error_message',
       header: '错误信息',
-      size: 200,
-      cell: ({ row }) => (
-        <span className="text-xs text-red-500" title={row.original.error_message || ''}>
-          {row.original.error_message
-            ? (row.original.error_message.length > 50
-                ? `${row.original.error_message.slice(0, 50)}...`
-                : row.original.error_message)
-            : '-'}
-        </span>
-      ),
+      size: 240,
+      cell: ({ row }) => {
+        const task = row.original
+        if (!task.error_message) return <span className="text-xs text-text-tertiary">-</span>
+        const categoryLabels: Record<string, { label: string; color: string }> = {
+          network: { label: '网络', color: 'bg-orange-100 text-orange-700' },
+          auth: { label: '认证', color: 'bg-red-100 text-red-700' },
+          parse: { label: '解析', color: 'bg-yellow-100 text-yellow-700' },
+          system: { label: '系统', color: 'bg-gray-100 text-gray-700' },
+        }
+        const cat = task.error_category ? categoryLabels[task.error_category] : null
+        return (
+          <div className="flex items-center gap-1.5">
+            {cat && (
+              <span className={`shrink-0 rounded px-1 py-0.5 text-[10px] font-medium ${cat.color}`}>
+                {cat.label}
+              </span>
+            )}
+            <span className="truncate text-xs text-red-500" title={task.error_message}>
+              {task.error_message.length > 40
+                ? `${task.error_message.slice(0, 40)}...`
+                : task.error_message}
+            </span>
+          </div>
+        )
+      },
     },
     createActionColumn<CrawlHubTask>({
       width: 120,

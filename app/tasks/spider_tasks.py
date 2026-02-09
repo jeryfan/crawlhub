@@ -105,3 +105,42 @@ async def execute_spider(self, spider_id: str, task_id: str | None = None, trigg
                     spider_id=spider_id,
                     task_id=str(task.id),
                 )
+
+
+@shared_task
+async def check_task_heartbeats():
+    """检查 RUNNING 状态任务的心跳，超时则标记失败"""
+    now = datetime.utcnow()
+    heartbeat_timeout = timedelta(minutes=2)
+    min_running_time = timedelta(minutes=3)
+
+    async with AsyncSessionLocal() as session:
+        result = await session.execute(
+            select(SpiderTask).where(
+                SpiderTask.status == SpiderTaskStatus.RUNNING,
+            )
+        )
+        tasks = list(result.scalars().all())
+
+        for task in tasks:
+            try:
+                # 跳过运行时间不足 3 分钟的任务
+                if task.started_at and (now - task.started_at) < min_running_time:
+                    continue
+
+                # 检查心跳超时
+                if task.last_heartbeat:
+                    if (now - task.last_heartbeat) > heartbeat_timeout:
+                        task.status = SpiderTaskStatus.FAILED
+                        task.error_category = "system"
+                        task.error_message = "心跳超时：任务可能已停止响应"
+                        task.finished_at = now
+                        logger.warning(f"Task {task.id} heartbeat timeout, marking as failed")
+                elif task.started_at and (now - task.started_at) > min_running_time:
+                    # 从未收到心跳且已运行超过3分钟 — 可能未使用 SDK，不强制标记
+                    pass
+
+            except Exception as e:
+                logger.error(f"Error checking heartbeat for task {task.id}: {e}")
+
+        await session.commit()

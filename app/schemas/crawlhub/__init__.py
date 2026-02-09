@@ -14,6 +14,13 @@ from .coder_workspace import (
     FileUploadResponse,
 )
 from .deployment import DeployRequest, DeploymentResponse, DeploymentListResponse
+from .internal import (
+    ItemsIngestRequest,
+    ProgressReport,
+    HeartbeatReport,
+    CheckpointSave,
+    CheckpointQuery,
+)
 
 __all__ = [
     "ProjectCreate",
@@ -38,4 +45,9 @@ __all__ = [
     "DeployRequest",
     "DeploymentResponse",
     "DeploymentListResponse",
+    "ItemsIngestRequest",
+    "ProgressReport",
+    "HeartbeatReport",
+    "CheckpointSave",
+    "CheckpointQuery",
 ]

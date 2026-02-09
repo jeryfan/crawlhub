@@ -15,6 +15,19 @@ class SpiderBase(BaseModel):
     source: ProjectSource = Field(default=ProjectSource.EMPTY, description="项目来源")
     git_repo: str | None = Field(None, description="Git 仓库地址")
     webhook_url: str | None = Field(None, max_length=500, description="Webhook 回调 URL")
+    # 执行配置
+    timeout_seconds: int | None = Field(None, description="执行超时(秒)")
+    max_items: int | None = Field(None, description="最大采集条数")
+    memory_limit_mb: int | None = Field(None, description="内存限制(MB)")
+    requirements_txt: str | None = Field(None, description="依赖列表")
+    env_vars: str | None = Field(None, description="自定义环境变量 JSON")
+    # 代理与限速
+    proxy_enabled: bool | None = Field(None, description="启用代理")
+    rate_limit_rps: float | None = Field(None, description="请求频率限制(次/秒)")
+    autothrottle_enabled: bool | None = Field(None, description="自动限速")
+    # 数据去重
+    dedup_enabled: bool | None = Field(None, description="启用去重")
+    dedup_fields: str | None = Field(None, description="去重字段(逗号分隔)")
 
 
 class SpiderCreate(SpiderBase):
@@ -31,6 +44,16 @@ class SpiderUpdate(BaseModel):
     source: ProjectSource | None = None
     git_repo: str | None = None
     webhook_url: str | None = None
+    timeout_seconds: int | None = None
+    max_items: int | None = None
+    memory_limit_mb: int | None = None
+    requirements_txt: str | None = None
+    env_vars: str | None = None
+    proxy_enabled: bool | None = None
+    rate_limit_rps: float | None = None
+    autothrottle_enabled: bool | None = None
+    dedup_enabled: bool | None = None
+    dedup_fields: str | None = None
 
 
 class SpiderResponse(SpiderBase):

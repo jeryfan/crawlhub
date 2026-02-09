@@ -2,6 +2,8 @@
 import asyncio
 import json
 import logging
+import os
+import shutil
 import tempfile
 from datetime import datetime
 from pathlib import Path
@@ -11,6 +13,8 @@ from models.crawlhub import ProjectSource, Spider, SpiderTask, SpiderTaskStatus
 from services.base_service import BaseService
 
 logger = logging.getLogger(__name__)
+
+SDK_SOURCE_PATH = Path(__file__).parent.parent.parent / "libs" / "crawlhub_sdk" / "crawlhub.py"
 
 
 class SpiderRunnerService(BaseService):
@@ -40,6 +44,124 @@ class SpiderRunnerService(BaseService):
         await self.db.refresh(task)
         return task
 
+    def _get_spider_env(self, spider: Spider, task: SpiderTask) -> dict:
+        """构建爬虫进程的环境变量"""
+        env = os.environ.copy()
+        env["CRAWLHUB_TASK_ID"] = str(task.id)
+        env["CRAWLHUB_SPIDER_ID"] = str(spider.id)
+        env["CRAWLHUB_API_URL"] = os.getenv(
+            "CRAWLHUB_INTERNAL_API_URL", "http://localhost:8000"
+        )
+
+        # 代理注入
+        if spider.proxy_enabled:
+            proxy_url = self._get_proxy_url(spider)
+            if proxy_url:
+                env["CRAWLHUB_PROXY_URL"] = proxy_url
+                env["HTTP_PROXY"] = proxy_url
+                env["HTTPS_PROXY"] = proxy_url
+
+        # 限速
+        if spider.rate_limit_rps:
+            env["CRAWLHUB_RATE_LIMIT"] = str(spider.rate_limit_rps)
+
+        # 最大采集条数
+        if spider.max_items:
+            env["CRAWLHUB_MAX_ITEMS"] = str(spider.max_items)
+
+        # Scrapy 特殊环境变量
+        if spider.source == ProjectSource.SCRAPY:
+            if spider.rate_limit_rps:
+                env["SCRAPY_DOWNLOAD_DELAY"] = str(1.0 / spider.rate_limit_rps)
+            if spider.autothrottle_enabled:
+                env["SCRAPY_AUTOTHROTTLE_ENABLED"] = "True"
+
+        # 自定义环境变量
+        if spider.env_vars:
+            try:
+                custom_vars = json.loads(spider.env_vars)
+                if isinstance(custom_vars, dict):
+                    env.update({k: str(v) for k, v in custom_vars.items()})
+            except json.JSONDecodeError:
+                pass
+
+        return env
+
+    def _get_proxy_url(self, spider: Spider) -> str | None:
+        """从代理池获取一个可用代理 URL"""
+        # This is a sync helper; for actual use in async context,
+        # proxy will be fetched asynchronously in run_spider_sync
+        return None  # Placeholder; actual logic is in _get_proxy_url_async
+
+    async def _get_proxy_url_async(self, spider: Spider) -> str | None:
+        """从代理池异步获取一个可用代理"""
+        from sqlalchemy import select
+        from models.crawlhub.proxy import Proxy, ProxyStatus
+
+        result = await self.db.execute(
+            select(Proxy)
+            .where(Proxy.status == ProxyStatus.ACTIVE)
+            .order_by(Proxy.success_rate.desc())
+            .limit(1)
+        )
+        proxy = result.scalar_one_or_none()
+        if not proxy:
+            return None
+
+        auth = ""
+        if proxy.username and proxy.password:
+            auth = f"{proxy.username}:{proxy.password}@"
+        return f"{proxy.protocol}://{auth}{proxy.host}:{proxy.port}"
+
+    def _embed_sdk(self, work_dir: Path) -> None:
+        """复制 SDK 到工作目录，使爬虫可以 from crawlhub import ..."""
+        target = work_dir / "crawlhub.py"
+        if SDK_SOURCE_PATH.exists():
+            shutil.copy2(str(SDK_SOURCE_PATH), str(target))
+
+    async def _install_requirements(self, spider: Spider, work_dir: Path, env: dict) -> None:
+        """安装 per-spider 依赖"""
+        if not spider.requirements_txt or not spider.requirements_txt.strip():
+            return
+
+        req_file = work_dir / "requirements.txt"
+        req_file.write_text(spider.requirements_txt)
+
+        deps_dir = work_dir / ".deps"
+        deps_dir.mkdir(exist_ok=True)
+
+        process = await asyncio.create_subprocess_exec(
+            "pip", "install", "--target", str(deps_dir),
+            "-r", str(req_file), "--quiet",
+            cwd=str(work_dir),
+            stdout=asyncio.subprocess.PIPE,
+            stderr=asyncio.subprocess.PIPE,
+        )
+        try:
+            await asyncio.wait_for(process.communicate(), timeout=120)
+        except asyncio.TimeoutError:
+            process.kill()
+            logger.warning(f"pip install timeout for spider {spider.id}")
+            return
+
+        # Add deps to PYTHONPATH
+        python_path = env.get("PYTHONPATH", "")
+        if python_path:
+            env["PYTHONPATH"] = f"{deps_dir}:{python_path}"
+        else:
+            env["PYTHONPATH"] = str(deps_dir)
+
+    def _classify_error(self, error_msg: str, stderr: str) -> str:
+        """根据错误内容自动分类"""
+        combined = f"{error_msg} {stderr}".lower()
+        if any(k in combined for k in ["timeout", "connectionerror", "dns", "refused", "connectionreset", "networkerror"]):
+            return "network"
+        if any(k in combined for k in ["httpstatuserror", "403", "429", "captcha", "unauthorized", "forbidden"]):
+            return "auth"
+        if any(k in combined for k in ["keyerror", "indexerror", "attributeerror", "parseerror", "jsondecodeerror", "valueerror"]):
+            return "parse"
+        return "system"
+
     async def run_spider_sync(self, spider: Spider, task: SpiderTask) -> None:
         """同步执行爬虫（用于 Celery worker 调用，不走 SSE）"""
         task.status = SpiderTaskStatus.RUNNING
@@ -51,6 +173,28 @@ class SpiderRunnerService(BaseService):
                 work_dir = Path(temp_dir)
                 await self.prepare_from_deployment(spider, work_dir)
 
+                # 嵌入 SDK
+                self._embed_sdk(work_dir)
+
+                # 设置输出目录
+                output_dir = work_dir / "output"
+                output_dir.mkdir(exist_ok=True)
+
+                # 构建环境变量
+                env = self._get_spider_env(spider, task)
+                env["CRAWLHUB_OUTPUT_DIR"] = str(output_dir)
+
+                # 代理注入（异步获取）
+                if spider.proxy_enabled:
+                    proxy_url = await self._get_proxy_url_async(spider)
+                    if proxy_url:
+                        env["CRAWLHUB_PROXY_URL"] = proxy_url
+                        env["HTTP_PROXY"] = proxy_url
+                        env["HTTPS_PROXY"] = proxy_url
+
+                # 安装依赖
+                await self._install_requirements(spider, work_dir, env)
+
                 cmd = self._build_command(spider, work_dir)
 
                 process = await asyncio.create_subprocess_exec(
@@ -58,16 +202,19 @@ class SpiderRunnerService(BaseService):
                     cwd=str(work_dir),
                     stdout=asyncio.subprocess.PIPE,
                     stderr=asyncio.subprocess.PIPE,
+                    env=env,
                 )
 
+                timeout = spider.timeout_seconds or 300
                 try:
                     stdout, stderr = await asyncio.wait_for(
-                        process.communicate(), timeout=300
+                        process.communicate(), timeout=timeout
                     )
                 except asyncio.TimeoutError:
                     process.kill()
                     task.status = SpiderTaskStatus.FAILED
-                    task.error_message = "执行超时 (最大 5 分钟)"
+                    task.error_message = f"执行超时 (最大 {timeout} 秒)"
+                    task.error_category = "system"
                     return
 
                 stdout_str = stdout.decode("utf-8", errors="replace") if stdout else ""
@@ -76,17 +223,23 @@ class SpiderRunnerService(BaseService):
                 if process.returncode == 0:
                     task.status = SpiderTaskStatus.COMPLETED
                     await self._store_spider_data(task, stdout_str)
+                    # 收集文件输出
+                    await self._collect_file_output(task, output_dir)
                 else:
                     task.status = SpiderTaskStatus.FAILED
                     task.error_message = f"进程退出码: {process.returncode}"
                     if stderr_str:
                         task.error_message += f"\n{stderr_str[:2000]}"
+                    task.error_category = self._classify_error(
+                        task.error_message, stderr_str
+                    )
 
                 await self._store_task_log(task, stdout_str, stderr_str)
 
         except Exception as e:
             task.status = SpiderTaskStatus.FAILED
             task.error_message = str(e)
+            task.error_category = "system"
         finally:
             task.finished_at = datetime.utcnow()
             await self.db.commit()
@@ -168,7 +321,7 @@ class SpiderRunnerService(BaseService):
         raise ValueError("爬虫没有可执行的代码（无部署快照且无 script_content）")
 
     def _build_command(self, spider: Spider, work_dir: Path) -> list[str]:
-        """构建执行命令"""
+        """构建执行命令（支持 async 函数自动检测）"""
         if spider.source == ProjectSource.SCRAPY:
             return ["scrapy", "crawl", spider.name]
 
@@ -179,10 +332,12 @@ class SpiderRunnerService(BaseService):
             func_name = "run"
 
         return ["python", "-c", f"""
-import sys, json
+import sys, json, asyncio, inspect
 sys.path.insert(0, '{work_dir}')
 from {module} import {func_name}
 result = {func_name}({{}})
+if inspect.isawaitable(result):
+    result = asyncio.run(result)
 if result is not None:
     print(json.dumps(result, ensure_ascii=False, default=str))
 """]
@@ -210,6 +365,20 @@ if result is not None:
                 # 准备文件
                 await self.prepare_project_files(spider, work_dir)
 
+                # 嵌入 SDK
+                self._embed_sdk(work_dir)
+
+                # 设置输出目录
+                output_dir = work_dir / "output"
+                output_dir.mkdir(exist_ok=True)
+
+                # 构建环境变量
+                env = self._get_spider_env(spider, task)
+                env["CRAWLHUB_OUTPUT_DIR"] = str(output_dir)
+
+                # 安装依赖
+                await self._install_requirements(spider, work_dir, env)
+
                 yield {"event": "status", "data": {"status": "preparing", "message": "准备执行环境..."}}
 
                 cmd = self._build_command(spider, work_dir)
@@ -219,10 +388,10 @@ if result is not None:
                     cwd=str(work_dir),
                     stdout=asyncio.subprocess.PIPE,
                     stderr=asyncio.subprocess.PIPE,
+                    env=env,
                 )
 
-                # 设置超时 (5 分钟)
-                timeout = 300
+                timeout = spider.timeout_seconds or 300
 
                 async def read_stream(stream, event_type):
                     while True:
@@ -255,20 +424,26 @@ if result is not None:
                     process.kill()
                     yield {
                         "event": "error",
-                        "data": {"message": "执行超时 (最大 5 分钟)"}
+                        "data": {"message": f"执行超时 (最大 {timeout} 秒)"}
                     }
                     task.status = SpiderTaskStatus.FAILED
                     task.error_message = "执行超时"
+                    task.error_category = "system"
                 else:
                     if process.returncode == 0:
                         task.status = SpiderTaskStatus.COMPLETED
                     else:
                         task.status = SpiderTaskStatus.FAILED
                         task.error_message = f"进程退出码: {process.returncode}"
+                        stderr_str = "\n".join(stderr_lines)
+                        task.error_category = self._classify_error(
+                            task.error_message, stderr_str
+                        )
 
         except Exception as e:
             task.status = SpiderTaskStatus.FAILED
             task.error_message = str(e)
+            task.error_category = "system"
             yield {"event": "error", "data": {"message": str(e)}}
 
         finally:
@@ -296,10 +471,21 @@ if result is not None:
             }
 
     async def _store_spider_data(self, task: SpiderTask, stdout: str) -> None:
-        """将爬取结果存入 MongoDB spider_data"""
+        """将爬取结果存入 MongoDB spider_data
+
+        优先级:
+        1. task.total_count > 0（SDK 已上报）→ 跳过 stdout 解析
+        2. 解析 stdout 最后一行为 JSON（忽略之前的 print）
+        3. 单行 stdout 整体解析（旧行为兼容）
+        """
         from extensions.ext_mongodb import mongodb_client
 
         if not mongodb_client.is_enabled():
+            return
+
+        # 如果 SDK 已上报数据，跳过 stdout 解析
+        await self.db.refresh(task)
+        if task.total_count > 0:
             return
 
         try:
@@ -307,7 +493,20 @@ if result is not None:
             if not output:
                 return
 
-            data = json.loads(output)
+            # 优先尝试解析最后一行（兼容有 print 输出的情况）
+            data = None
+            lines = output.split("\n")
+            if len(lines) > 1:
+                last_line = lines[-1].strip()
+                try:
+                    data = json.loads(last_line)
+                except json.JSONDecodeError:
+                    pass
+
+            # 回退到整体解析
+            if data is None:
+                data = json.loads(output)
+
             collection = mongodb_client.get_collection("spider_data")
 
             if isinstance(data, list):
@@ -336,6 +535,64 @@ if result is not None:
             pass  # stdout 不是 JSON，跳过
         except Exception as e:
             logger.warning(f"Failed to store spider data for task {task.id}: {e}")
+
+    async def _collect_file_output(self, task: SpiderTask, output_dir: Path) -> None:
+        """收集文件输出（JSON/JSONL/CSV）到 MongoDB"""
+        from extensions.ext_mongodb import mongodb_client
+
+        if not mongodb_client.is_enabled():
+            return
+        if not output_dir.exists():
+            return
+
+        collection = mongodb_client.get_collection("spider_data")
+        total_inserted = 0
+
+        for file_path in output_dir.iterdir():
+            if not file_path.is_file():
+                continue
+
+            try:
+                items = []
+                suffix = file_path.suffix.lower()
+
+                if suffix == ".json":
+                    content = file_path.read_text(encoding="utf-8")
+                    data = json.loads(content)
+                    if isinstance(data, list):
+                        items = data
+                    elif isinstance(data, dict):
+                        items = [data]
+
+                elif suffix == ".jsonl":
+                    for line in file_path.read_text(encoding="utf-8").splitlines():
+                        line = line.strip()
+                        if line:
+                            items.append(json.loads(line))
+
+                elif suffix == ".csv":
+                    import csv
+                    with open(file_path, newline="", encoding="utf-8") as f:
+                        reader = csv.DictReader(f)
+                        items = list(reader)
+
+                if items:
+                    docs = [{
+                        "task_id": str(task.id),
+                        "spider_id": str(task.spider_id),
+                        "data": item,
+                        "is_test": task.is_test,
+                        "created_at": datetime.utcnow(),
+                    } for item in items]
+                    await collection.insert_many(docs)
+                    total_inserted += len(docs)
+
+            except Exception as e:
+                logger.warning(f"Failed to collect file output {file_path}: {e}")
+
+        if total_inserted > 0:
+            task.total_count = (task.total_count or 0) + total_inserted
+            task.success_count = (task.success_count or 0) + total_inserted
 
     async def _store_task_log(self, task: SpiderTask, stdout: str, stderr: str) -> None:
         """存储任务日志到 MongoDB"""

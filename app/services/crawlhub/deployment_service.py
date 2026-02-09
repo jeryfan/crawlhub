@@ -146,7 +146,7 @@ class DeploymentService(BaseService):
         return list(result.scalars().all()), total
 
     async def rollback(self, spider: Spider, deployment_id: str) -> Deployment:
-        """回滚到指定版本"""
+        """回滚到指定版本，同时将代码同步到工作区"""
         target = await self.get_deployment(deployment_id)
         if not target or target.spider_id != spider.id:
             raise ValueError("部署记录不存在或不属于此爬虫")
@@ -168,6 +168,15 @@ class DeploymentService(BaseService):
         await self.db.refresh(target)
 
         logger.info(f"Rolled back spider {spider.id} to deployment v{target.version}")
+
+        # 将回滚版本的代码同步到工作区
+        if spider.coder_workspace_id:
+            try:
+                file_count = await self.restore_to_workspace(spider, deployment_id)
+                logger.info(f"Synced rollback v{target.version} to workspace: {file_count} files")
+            except Exception as e:
+                logger.warning(f"Failed to sync rollback to workspace: {e}")
+
         return target
 
     @staticmethod
@@ -184,6 +193,28 @@ class DeploymentService(BaseService):
         buf = io.BytesIO(archive_bytes)
         with tarfile.open(fileobj=buf, mode="r:gz") as tar:
             tar.extractall(path=str(target_dir), filter="data")
+
+    async def delete_deployment(self, spider: Spider, deployment_id: str) -> None:
+        """删除部署版本（不能删除 active 版本）"""
+        deployment = await self.get_deployment(deployment_id)
+        if not deployment or deployment.spider_id != spider.id:
+            raise ValueError("部署记录不存在或不属于此爬虫")
+
+        if deployment.status == DeploymentStatus.ACTIVE:
+            raise ValueError("不能删除当前活跃的部署版本")
+
+        # 删除 GridFS 文件
+        try:
+            fs = AsyncIOMotorGridFSBucket(mongodb_client.db, bucket_name=GRIDFS_BUCKET_NAME)
+            await fs.delete(ObjectId(deployment.file_archive_id))
+        except Exception as e:
+            logger.warning(f"Failed to delete GridFS file {deployment.file_archive_id}: {e}")
+
+        # 删除 PG 记录
+        await self.db.delete(deployment)
+        await self.db.commit()
+
+        logger.info(f"Deleted deployment {deployment_id} (v{deployment.version}) for spider {spider.id}")
 
     async def restore_to_workspace(
         self,

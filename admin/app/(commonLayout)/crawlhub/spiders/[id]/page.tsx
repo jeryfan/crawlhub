@@ -9,11 +9,12 @@ import {
   RiLoader4Line,
   RiPlayLine,
   RiRocketLine,
+  RiSettings3Line,
   RiStopLine,
   RiTaskLine,
 } from '@remixicon/react'
-import { useParams, useRouter } from 'next/navigation'
-import { useState } from 'react'
+import { useParams, usePathname, useRouter, useSearchParams } from 'next/navigation'
+import { useCallback, useState } from 'react'
 import Button from '@/app/components/base/button'
 import Skeleton from '@/app/components/base/skeleton'
 import Toast from '@/app/components/base/toast'
@@ -26,16 +27,18 @@ import {
 } from '@/service/use-crawlhub'
 import DataTab from './tabs/data-tab'
 import DeploymentsTab from './tabs/deployments-tab'
+import SettingsTab from './tabs/settings-tab'
 import TasksTab from './tabs/tasks-tab'
 import WorkspaceTab from './tabs/workspace-tab'
 
-type TabKey = 'workspace' | 'deployments' | 'tasks' | 'data'
+type TabKey = 'workspace' | 'deployments' | 'tasks' | 'data' | 'settings'
 
 const tabsList: { key: TabKey; label: string; icon: React.ReactNode }[] = [
   { key: 'workspace', label: '开发', icon: <RiCodeLine className="h-4 w-4" /> },
   { key: 'deployments', label: '部署', icon: <RiRocketLine className="h-4 w-4" /> },
   { key: 'tasks', label: '任务', icon: <RiTaskLine className="h-4 w-4" /> },
   { key: 'data', label: '数据', icon: <RiDatabase2Line className="h-4 w-4" /> },
+  { key: 'settings', label: '设置', icon: <RiSettings3Line className="h-4 w-4" /> },
 ]
 
 const statusLabels: Record<CoderWorkspaceStatus, string> = {
@@ -61,9 +64,26 @@ const statusColors: Record<CoderWorkspaceStatus, string> = {
 const SpiderDetailPage = () => {
   const params = useParams()
   const router = useRouter()
+  const pathname = usePathname()
+  const searchParams = useSearchParams()
   const spiderId = params.id as string
 
-  const [activeTab, setActiveTab] = useState<TabKey>('workspace')
+  // 从 URL 读取 tab 参数，保持刷新后状态
+  const tabFromUrl = searchParams.get('tab') as TabKey | null
+  const initialTab = tabFromUrl && tabsList.some(t => t.key === tabFromUrl) ? tabFromUrl : 'workspace'
+
+  const [activeTab, setActiveTab] = useState<TabKey>(initialTab)
+  const [mountedTabs, setMountedTabs] = useState<Set<TabKey>>(() => new Set([initialTab]))
+
+  const handleTabChange = useCallback((tab: TabKey) => {
+    setActiveTab(tab)
+    setMountedTabs((prev) => {
+      if (prev.has(tab))
+        return prev
+      return new Set([...prev, tab])
+    })
+    router.replace(`${pathname}?tab=${tab}`, { scroll: false })
+  }, [pathname, router])
 
   const { data: spider, isLoading: isLoadingSpider } = useSpider(spiderId)
   const {
@@ -235,7 +255,7 @@ const SpiderDetailPage = () => {
         {tabsList.map(tab => (
           <button
             key={tab.key}
-            onClick={() => setActiveTab(tab.key)}
+            onClick={() => handleTabChange(tab.key)}
             className={`flex items-center gap-1.5 border-b-2 px-4 py-2 text-sm font-medium transition-colors ${
               activeTab === tab.key
                 ? 'border-text-accent text-text-accent'
@@ -250,23 +270,36 @@ const SpiderDetailPage = () => {
 
       {/* Tab Content */}
       <div className="min-h-0 flex-1">
-        {activeTab === 'workspace' && (
-          <WorkspaceTab
-            spider={spider}
-            workspaceStatus={workspaceStatus}
-            isLoadingStatus={isLoadingStatus}
-            onStartWorkspace={handleStartWorkspace}
-            isOperating={isOperating}
-          />
+        {mountedTabs.has('workspace') && (
+          <div className={activeTab !== 'workspace' ? 'hidden' : 'h-full'}>
+            <WorkspaceTab
+              spider={spider}
+              workspaceStatus={workspaceStatus}
+              isLoadingStatus={isLoadingStatus}
+              onStartWorkspace={handleStartWorkspace}
+              isOperating={isOperating}
+            />
+          </div>
         )}
-        {activeTab === 'deployments' && (
-          <DeploymentsTab spiderId={spiderId} spider={spider} />
+        {mountedTabs.has('deployments') && (
+          <div className={activeTab !== 'deployments' ? 'hidden' : 'h-full'}>
+            <DeploymentsTab spiderId={spiderId} spider={spider} />
+          </div>
         )}
-        {activeTab === 'tasks' && (
-          <TasksTab spiderId={spiderId} />
+        {mountedTabs.has('tasks') && (
+          <div className={activeTab !== 'tasks' ? 'hidden' : 'h-full'}>
+            <TasksTab spiderId={spiderId} />
+          </div>
         )}
-        {activeTab === 'data' && (
-          <DataTab spiderId={spiderId} />
+        {mountedTabs.has('data') && (
+          <div className={activeTab !== 'data' ? 'hidden' : 'h-full'}>
+            <DataTab spiderId={spiderId} />
+          </div>
+        )}
+        {mountedTabs.has('settings') && (
+          <div className={activeTab !== 'settings' ? 'hidden' : 'h-full'}>
+            <SettingsTab spiderId={spiderId} spider={spider} />
+          </div>
         )}
       </div>
     </div>

@@ -4,6 +4,7 @@ import type { ColumnDef } from '@/app/components/base/table'
 import type { Deployment, Spider } from '@/types/crawlhub'
 import {
   RiArrowGoBackLine,
+  RiDeleteBinLine,
   RiRefreshLine,
   RiRocketLine,
   RiUploadLine,
@@ -18,6 +19,7 @@ import { createActionColumn, DataTable } from '@/app/components/base/table'
 import Toast from '@/app/components/base/toast'
 import useTimestamp from '@/hooks/use-timestamp'
 import {
+  useDeleteDeployment,
   useDeployFromWorkspace,
   useDeployments,
   useRestoreWorkspace,
@@ -35,6 +37,7 @@ const DeploymentsTab = ({ spiderId, spider }: DeploymentsTabProps) => {
   const [showDeployModal, setShowDeployModal] = useState(false)
   const [deployNote, setDeployNote] = useState('')
   const [rollbackTarget, setRollbackTarget] = useState<Deployment | null>(null)
+  const [deleteTarget, setDeleteTarget] = useState<Deployment | null>(null)
 
   const { formatDateTime } = useTimestamp()
 
@@ -42,6 +45,7 @@ const DeploymentsTab = ({ spiderId, spider }: DeploymentsTabProps) => {
   const deployMutation = useDeployFromWorkspace()
   const rollbackMutation = useRollbackDeployment()
   const restoreMutation = useRestoreWorkspace()
+  const deleteMutation = useDeleteDeployment()
 
   const handleDeploy = async () => {
     try {
@@ -80,6 +84,18 @@ const DeploymentsTab = ({ spiderId, spider }: DeploymentsTabProps) => {
     }
     catch {
       Toast.notify({ type: 'error', message: '恢复失败' })
+    }
+  }
+
+  const handleDelete = async () => {
+    if (!deleteTarget) return
+    try {
+      await deleteMutation.mutateAsync({ spiderId, deploymentId: deleteTarget.id })
+      Toast.notify({ type: 'success', message: `已删除 v${deleteTarget.version}` })
+      setDeleteTarget(null)
+      refetch()
+    } catch {
+      Toast.notify({ type: 'error', message: '删除失败' })
     }
   }
 
@@ -152,6 +168,13 @@ const DeploymentsTab = ({ spiderId, spider }: DeploymentsTabProps) => {
           label: '回滚',
           onClick: (row) => setRollbackTarget(row),
           visible: (row) => row.status !== 'active',
+        },
+        {
+          icon: RiDeleteBinLine,
+          label: '删除',
+          onClick: (row) => setDeleteTarget(row),
+          visible: (row) => row.status !== 'active',
+          variant: 'danger',
         },
       ],
     }),
@@ -233,6 +256,17 @@ const DeploymentsTab = ({ spiderId, spider }: DeploymentsTabProps) => {
         isLoading={rollbackMutation.isPending}
         title="确认回滚"
         content={`确定要回滚到 v${rollbackTarget?.version} 吗？当前活跃版本将被归档。`}
+      />
+
+      {/* Delete Confirm */}
+      <Confirm
+        isShow={!!deleteTarget}
+        onCancel={() => setDeleteTarget(null)}
+        onConfirm={handleDelete}
+        isLoading={deleteMutation.isPending}
+        title="确认删除"
+        content={`确定要删除 v${deleteTarget?.version} 吗？此操作不可恢复。`}
+        type="danger"
       />
     </div>
   )

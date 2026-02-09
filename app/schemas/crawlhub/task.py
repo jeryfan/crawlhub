@@ -21,6 +21,12 @@ class TaskResponse(BaseModel):
     trigger_type: str = "manual"
     retry_count: int = 0
     max_retries: int = 3
+    # Phase 2-3 扩展字段
+    error_category: str | None = None
+    last_heartbeat: datetime | None = None
+    checkpoint_data: str | None = None
+    items_per_second: float | None = None
+    peak_memory_mb: int | None = None
     created_at: datetime
     updated_at: datetime
 

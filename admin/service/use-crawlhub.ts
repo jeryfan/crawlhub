@@ -353,6 +353,17 @@ export const useRestoreWorkspace = () => {
   })
 }
 
+export const useDeleteDeployment = () => {
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationFn: ({ spiderId, deploymentId }: { spiderId: string; deploymentId: string }) =>
+      del(`/crawlhub/spiders/${spiderId}/deployments/${deploymentId}`),
+    onSuccess: (_, variables) => {
+      queryClient.invalidateQueries({ queryKey: [NAME_SPACE, 'deployments', variables.spiderId] })
+    },
+  })
+}
+
 // ============ Tasks API ============
 
 export const useTasks = (params?: TasksQueryParams) => {

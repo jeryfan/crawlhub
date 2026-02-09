@@ -96,3 +96,23 @@ async def rollback_deployment(
         raise HTTPException(status_code=400, detail=str(e))
 
     return ApiResponse(data=DeploymentResponse.model_validate(deployment))
+
+
+@router.delete("/{deployment_id}", response_model=MessageResponse)
+async def delete_deployment(
+    spider_id: str,
+    deployment_id: str,
+    db: AsyncSession = Depends(get_db),
+):
+    """删除部署版本（不能删除活跃版本）"""
+    spider = await SpiderService(db).get_by_id(spider_id)
+    if not spider:
+        raise HTTPException(status_code=404, detail="爬虫不存在")
+
+    service = DeploymentService(db)
+    try:
+        await service.delete_deployment(spider, deployment_id)
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+
+    return MessageResponse(msg="部署已删除")

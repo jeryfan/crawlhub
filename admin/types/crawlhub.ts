@@ -53,6 +53,19 @@ export type Spider = {
   active_deployment_id: string | null
   code_sync_status: string | null
   webhook_url: string | null
+  // 执行配置
+  timeout_seconds: number | null
+  max_items: number | null
+  memory_limit_mb: number | null
+  requirements_txt: string | null
+  env_vars: string | null
+  // 代理与限速
+  proxy_enabled: boolean | null
+  rate_limit_rps: number | null
+  autothrottle_enabled: boolean | null
+  // 数据去重
+  dedup_enabled: boolean | null
+  dedup_fields: string | null
   created_at: string
   updated_at: string
 }
@@ -78,6 +91,17 @@ export type SpiderUpdate = {
   entry_point?: string
   source?: ProjectSource
   git_repo?: string
+  webhook_url?: string
+  timeout_seconds?: number | null
+  max_items?: number | null
+  memory_limit_mb?: number | null
+  requirements_txt?: string | null
+  env_vars?: string | null
+  proxy_enabled?: boolean | null
+  rate_limit_rps?: number | null
+  autothrottle_enabled?: boolean | null
+  dedup_enabled?: boolean | null
+  dedup_fields?: string | null
 }
 
 export type SpidersQueryParams = {
@@ -122,6 +146,11 @@ export type CrawlHubTask = {
   trigger_type: string
   retry_count: number
   max_retries: number
+  // 扩展字段
+  error_category: string | null
+  last_heartbeat: string | null
+  items_per_second: number | null
+  peak_memory_mb: number | null
   created_at: string
   updated_at: string
 }

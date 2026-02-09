@@ -139,6 +139,11 @@ def init_app(app: FastAPI) -> Celery:
             "task": "tasks.proxy_tasks.reset_cooldown_proxies",
             "schedule": crontab(minute="*"),  # 每分钟重置冷却
         },
+        # 心跳检查
+        "crawlhub.check_task_heartbeats": {
+            "task": "tasks.spider_tasks.check_task_heartbeats",
+            "schedule": crontab(minute="*"),  # 每分钟检查
+        },
     }
 
     celery_app.conf.update(beat_schedule=beat_schedule, imports=imports)

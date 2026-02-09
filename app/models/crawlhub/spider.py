@@ -1,6 +1,6 @@
 import enum
 
-from sqlalchemy import Boolean, String, Text
+from sqlalchemy import Boolean, Float, Integer, String, Text
 from sqlalchemy.orm import Mapped, mapped_column
 
 from models.base import Base, DefaultFieldsMixin
@@ -44,6 +44,39 @@ class Spider(DefaultFieldsMixin, Base):
     )
     code_sync_status: Mapped[str | None] = mapped_column(
         String(20), nullable=True, comment="代码同步状态: syncing/synced/failed"
+    )
+    # 执行配置
+    timeout_seconds: Mapped[int | None] = mapped_column(
+        Integer, nullable=True, server_default="300", comment="执行超时(秒)"
+    )
+    max_items: Mapped[int | None] = mapped_column(
+        Integer, nullable=True, comment="最大采集条数"
+    )
+    memory_limit_mb: Mapped[int | None] = mapped_column(
+        Integer, nullable=True, comment="内存限制(MB)"
+    )
+    requirements_txt: Mapped[str | None] = mapped_column(
+        Text, nullable=True, comment="依赖列表"
+    )
+    env_vars: Mapped[str | None] = mapped_column(
+        Text, nullable=True, comment="自定义环境变量 JSON"
+    )
+    # 代理与限速
+    proxy_enabled: Mapped[bool | None] = mapped_column(
+        Boolean, nullable=True, server_default="false", comment="启用代理"
+    )
+    rate_limit_rps: Mapped[float | None] = mapped_column(
+        Float, nullable=True, comment="请求频率限制(次/秒)"
+    )
+    autothrottle_enabled: Mapped[bool | None] = mapped_column(
+        Boolean, nullable=True, server_default="false", comment="自动限速"
+    )
+    # 数据去重
+    dedup_enabled: Mapped[bool | None] = mapped_column(
+        Boolean, nullable=True, server_default="false", comment="启用去重"
+    )
+    dedup_fields: Mapped[str | None] = mapped_column(
+        String(500), nullable=True, comment="去重字段(逗号分隔)"
     )
 
     def __repr__(self) -> str:
