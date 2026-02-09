@@ -7,7 +7,7 @@ from sqlalchemy import select
 
 from models.crawlhub import Spider, SpiderTask, SpiderTaskStatus
 from models.crawlhub.alert import AlertLevel
-from models.engine import AsyncSessionLocal
+from models.engine import TaskSessionLocal, run_async
 from services.crawlhub.alert_service import AlertService
 from services.crawlhub.spider_runner_service import SpiderRunnerService
 
@@ -15,12 +15,16 @@ logger = logging.getLogger(__name__)
 
 
 @shared_task
-async def run_scheduled_spiders():
+def run_scheduled_spiders():
     """定时扫描并执行启用了 cron 的爬虫"""
+    run_async(_run_scheduled_spiders())
+
+
+async def _run_scheduled_spiders():
     now = datetime.utcnow()
     one_minute_ago = now - timedelta(minutes=1)
 
-    async with AsyncSessionLocal() as session:
+    async with TaskSessionLocal() as session:
         result = await session.execute(
             select(Spider).where(
                 Spider.is_active == True,
@@ -41,9 +45,13 @@ async def run_scheduled_spiders():
 
 
 @shared_task(bind=True, max_retries=3, default_retry_delay=60)
-async def execute_spider(self, spider_id: str, task_id: str | None = None, trigger_type: str = "schedule"):
+def execute_spider(self, spider_id: str, task_id: str | None = None, trigger_type: str = "schedule"):
     """执行单个爬虫任务"""
-    async with AsyncSessionLocal() as session:
+    run_async(_execute_spider(self, spider_id, task_id, trigger_type))
+
+
+async def _execute_spider(self, spider_id: str, task_id: str | None = None, trigger_type: str = "schedule"):
+    async with TaskSessionLocal() as session:
         result = await session.execute(
             select(Spider).where(Spider.id == spider_id)
         )
@@ -91,7 +99,6 @@ async def execute_spider(self, spider_id: str, task_id: str | None = None, trigg
         if task.status == SpiderTaskStatus.FAILED:
             if self.request.retries < self.max_retries:
                 raise self.retry(exc=Exception(task.error_message), kwargs={
-                    "spider_id": spider_id,
                     "task_id": str(task.id),
                     "trigger_type": trigger_type,
                 })
@@ -108,13 +115,17 @@ async def execute_spider(self, spider_id: str, task_id: str | None = None, trigg
 
 
 @shared_task
-async def check_task_heartbeats():
+def check_task_heartbeats():
     """检查 RUNNING 状态任务的心跳，超时则标记失败"""
+    run_async(_check_task_heartbeats())
+
+
+async def _check_task_heartbeats():
     now = datetime.utcnow()
     heartbeat_timeout = timedelta(minutes=2)
     min_running_time = timedelta(minutes=3)
 
-    async with AsyncSessionLocal() as session:
+    async with TaskSessionLocal() as session:
         result = await session.execute(
             select(SpiderTask).where(
                 SpiderTask.status == SpiderTaskStatus.RUNNING,

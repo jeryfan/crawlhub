@@ -42,6 +42,7 @@ export type Spider = {
   project_id: string
   name: string
   description: string | null
+  start_url: string | null
   script_content: string | null
   cron_expr: string | null
   is_active: boolean
@@ -74,6 +75,7 @@ export type SpiderCreate = {
   project_id: string
   name: string
   description?: string
+  start_url?: string
   script_content?: string
   cron_expr?: string
   is_active?: boolean
@@ -85,6 +87,7 @@ export type SpiderCreate = {
 export type SpiderUpdate = {
   name?: string
   description?: string
+  start_url?: string
   script_content?: string
   cron_expr?: string
   is_active?: boolean
@@ -313,4 +316,109 @@ export type TaskLog = {
   stdout: string
   stderr: string
   message?: string
+}
+
+// DataSource Types
+export type DataSourceType = 'postgresql' | 'mysql' | 'mongodb'
+export type DataSourceMode = 'external' | 'managed'
+export type DataSourceStatus = 'active' | 'inactive' | 'creating' | 'error'
+
+export type DataSource = {
+  id: string
+  name: string
+  description: string | null
+  type: DataSourceType
+  mode: DataSourceMode
+  status: DataSourceStatus
+  host: string | null
+  port: number | null
+  username: string | null
+  database: string | null
+  connection_options: Record<string, any> | null
+  container_id: string | null
+  container_name: string | null
+  docker_image: string | null
+  mapped_port: number | null
+  volume_path: string | null
+  last_check_at: string | null
+  last_error: string | null
+  created_at: string
+  updated_at: string
+}
+
+export type DataSourceCreate = {
+  name: string
+  type: DataSourceType
+  mode?: DataSourceMode
+  description?: string
+  host?: string
+  port?: number
+  username?: string
+  password?: string
+  database?: string
+  connection_options?: Record<string, any>
+  docker_image?: string
+  create_db_if_not_exists?: boolean
+}
+
+export type DataSourceTestRequest = {
+  type: DataSourceType
+  host: string
+  port?: number
+  username?: string
+  password?: string
+  database?: string
+  connection_options?: Record<string, any>
+}
+
+export type DataSourceUpdate = {
+  name?: string
+  description?: string
+  host?: string
+  port?: number
+  username?: string
+  password?: string
+  database?: string
+  connection_options?: Record<string, any>
+}
+
+export type DataSourcesQueryParams = {
+  page?: number
+  page_size?: number
+  type?: DataSourceType
+  mode?: DataSourceMode
+  keyword?: string
+}
+
+export type DataSourceListResponse = {
+  items: DataSource[]
+  total: number
+  page: number
+  page_size: number
+  total_pages: number
+}
+
+// Spider-DataSource Association Types
+export type SpiderDataSourceAssoc = {
+  id: string
+  spider_id: string
+  datasource_id: string
+  target_table: string
+  is_enabled: boolean
+  datasource_name?: string
+  datasource_type?: DataSourceType
+  datasource_status?: DataSourceStatus
+  created_at: string
+  updated_at: string
+}
+
+export type SpiderDataSourceCreate = {
+  datasource_id: string
+  target_table: string
+  is_enabled?: boolean
+}
+
+export type SpiderDataSourceUpdate = {
+  target_table?: string
+  is_enabled?: boolean
 }

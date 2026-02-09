@@ -3,7 +3,7 @@ import logging
 from celery import shared_task
 from sqlalchemy import delete, update
 
-from models.engine import AsyncSessionLocal
+from models.engine import TaskSessionLocal, run_async
 from models import Account
 from models.account import (
     AccountIntegrate,
@@ -20,7 +20,7 @@ logger = logging.getLogger(__name__)
 
 
 @shared_task
-async def delete_account_task(account_id: str) -> dict:
+def delete_account_task(account_id: str) -> dict:
     """
     Celery 任务：异步删除账户
 
@@ -35,7 +35,11 @@ async def delete_account_task(account_id: str) -> dict:
     Returns:
         删除结果统计
     """
-    async with AsyncSessionLocal() as session:
+    return run_async(_delete_account_task(account_id))
+
+
+async def _delete_account_task(account_id: str) -> dict:
+    async with TaskSessionLocal() as session:
         # 获取账户信息
         account = await session.get(Account, account_id)
         if not account:

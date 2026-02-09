@@ -99,6 +99,7 @@ def init_app(app: FastAPI) -> Celery:
         "tasks.billing_tasks",
         "tasks.spider_tasks",
         "tasks.proxy_tasks",
+        "tasks.datasource_tasks",
     ]
     day = app_config.CELERY_BEAT_SCHEDULER_TIME
 
@@ -143,6 +144,11 @@ def init_app(app: FastAPI) -> Celery:
         "crawlhub.check_task_heartbeats": {
             "task": "tasks.spider_tasks.check_task_heartbeats",
             "schedule": crontab(minute="*"),  # 每分钟检查
+        },
+        # 数据源健康检查
+        "crawlhub.check_datasource_health": {
+            "task": "tasks.datasource_tasks.check_datasource_health",
+            "schedule": crontab(minute="*/5"),  # 每5分钟检查
         },
     }
 

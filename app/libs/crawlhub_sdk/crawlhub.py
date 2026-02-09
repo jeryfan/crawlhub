@@ -30,6 +30,7 @@ _PROXY_URL = os.environ.get("CRAWLHUB_PROXY_URL", "")
 _RATE_LIMIT = os.environ.get("CRAWLHUB_RATE_LIMIT", "")
 _MAX_ITEMS = int(os.environ.get("CRAWLHUB_MAX_ITEMS", "0")) or None
 _OUTPUT_DIR = os.environ.get("CRAWLHUB_OUTPUT_DIR", "")
+_DATASOURCES_JSON = os.environ.get("CRAWLHUB_DATASOURCES", "")
 
 # ─── Internal state ───
 
@@ -63,7 +64,14 @@ def _post(path: str, data: dict) -> dict | None:
     try:
         with urllib.request.urlopen(req, timeout=10) as resp:
             return json.loads(resp.read().decode("utf-8"))
-    except (urllib.error.URLError, OSError, json.JSONDecodeError, Exception):
+    except urllib.error.HTTPError as e:
+        import sys
+        body = e.read().decode("utf-8", errors="replace")[:200] if e.fp else ""
+        print(f"[crawlhub:error] POST {url} → {e.code}: {body}", file=sys.stderr)
+        return None
+    except Exception as e:
+        import sys
+        print(f"[crawlhub:error] POST {url} failed: {e}", file=sys.stderr)
         return None
 
 
@@ -76,7 +84,13 @@ def _get(path: str) -> dict | None:
     try:
         with urllib.request.urlopen(req, timeout=10) as resp:
             return json.loads(resp.read().decode("utf-8"))
-    except (urllib.error.URLError, OSError, json.JSONDecodeError, Exception):
+    except urllib.error.HTTPError as e:
+        import sys
+        print(f"[crawlhub:error] GET {url} → {e.code}", file=sys.stderr)
+        return None
+    except Exception as e:
+        import sys
+        print(f"[crawlhub:error] GET {url} failed: {e}", file=sys.stderr)
         return None
 
 
@@ -184,6 +198,31 @@ def throttle() -> None:
         if elapsed < interval:
             time.sleep(interval - elapsed)
         _last_throttle = time.monotonic()
+
+
+def get_datasources() -> list[dict]:
+    """返回所有配置的数据源连接信息。
+
+    每个 dict 包含: id, name, type, host, port, username, password, database
+    用户可使用这些信息直接连接数据库（需自行安装驱动）。
+    """
+    if not _DATASOURCES_JSON:
+        return []
+    try:
+        ds_list = json.loads(_DATASOURCES_JSON)
+        if isinstance(ds_list, list):
+            return ds_list
+    except (json.JSONDecodeError, TypeError):
+        pass
+    return []
+
+
+def get_datasource(name: str) -> dict | None:
+    """按名称获取数据源连接信息。"""
+    for ds in get_datasources():
+        if ds.get("name") == name:
+            return ds
+    return None
 
 
 # ─── Heartbeat background thread ───

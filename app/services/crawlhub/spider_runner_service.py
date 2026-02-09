@@ -50,7 +50,7 @@ class SpiderRunnerService(BaseService):
         env["CRAWLHUB_TASK_ID"] = str(task.id)
         env["CRAWLHUB_SPIDER_ID"] = str(spider.id)
         env["CRAWLHUB_API_URL"] = os.getenv(
-            "CRAWLHUB_INTERNAL_API_URL", "http://localhost:8000"
+            "CRAWLHUB_INTERNAL_API_URL", "http://localhost:8000/platform/api"
         )
 
         # 代理注入
@@ -85,7 +85,40 @@ class SpiderRunnerService(BaseService):
             except json.JSONDecodeError:
                 pass
 
+        # 数据源连接信息注入（同步方法中不做 DB 查询，由调用方注入）
         return env
+
+    async def _inject_datasource_env(self, spider: Spider, env: dict) -> None:
+        """注入数据源连接信息到环境变量"""
+        from sqlalchemy import select
+        from models.crawlhub import DataSource, DataSourceStatus, SpiderDataSource
+
+        result = await self.db.execute(
+            select(SpiderDataSource, DataSource)
+            .join(DataSource, SpiderDataSource.datasource_id == DataSource.id)
+            .where(
+                SpiderDataSource.spider_id == str(spider.id),
+                SpiderDataSource.is_enabled.is_(True),
+                DataSource.status == DataSourceStatus.ACTIVE,
+            )
+        )
+        rows = result.all()
+        if not rows:
+            return
+
+        ds_list = []
+        for assoc, ds in rows:
+            ds_list.append({
+                "id": str(ds.id),
+                "name": ds.name,
+                "type": ds.type.value,
+                "host": ds.host,
+                "port": ds.port,
+                "username": ds.username,
+                "password": ds.password,
+                "database": ds.database,
+            })
+        env["CRAWLHUB_DATASOURCES"] = json.dumps(ds_list, ensure_ascii=False)
 
     def _get_proxy_url(self, spider: Spider) -> str | None:
         """从代理池获取一个可用代理 URL"""
@@ -192,6 +225,9 @@ class SpiderRunnerService(BaseService):
                         env["HTTP_PROXY"] = proxy_url
                         env["HTTPS_PROXY"] = proxy_url
 
+                # 数据源连接信息注入
+                await self._inject_datasource_env(spider, env)
+
                 # 安装依赖
                 await self._install_requirements(spider, work_dir, env)
 
@@ -221,10 +257,12 @@ class SpiderRunnerService(BaseService):
                 stderr_str = stderr.decode("utf-8", errors="replace") if stderr else ""
 
                 if process.returncode == 0:
-                    task.status = SpiderTaskStatus.COMPLETED
                     await self._store_spider_data(task, stdout_str)
                     # 收集文件输出
                     await self._collect_file_output(task, output_dir)
+                    # 状态必须在 _store_spider_data 之后设置，
+                    # 因为该方法内部 refresh(task) 会从 DB 重载覆盖内存值
+                    task.status = SpiderTaskStatus.COMPLETED
                 else:
                     task.status = SpiderTaskStatus.FAILED
                     task.error_message = f"进程退出码: {process.returncode}"
@@ -325,12 +363,19 @@ class SpiderRunnerService(BaseService):
         if spider.source == ProjectSource.SCRAPY:
             return ["scrapy", "crawl", spider.name]
 
-        # 检查入口点配置
-        entry_point = spider.entry_point or "main:run"
-        module, _, func_name = entry_point.partition(":")
-        if not func_name:
-            func_name = "run"
+        entry_point = spider.entry_point
 
+        # 没有设置入口点时，直接执行 main.py
+        if not entry_point:
+            return ["python", str(work_dir / "main.py")]
+
+        module, _, func_name = entry_point.partition(":")
+
+        # 只指定了模块名（如 "main"），没有函数名
+        if not func_name:
+            return ["python", str(work_dir / f"{module}.py")]
+
+        # 指定了模块和函数（如 "main:run"）
         return ["python", "-c", f"""
 import sys, json, asyncio, inspect
 sys.path.insert(0, '{work_dir}')
@@ -375,6 +420,9 @@ if result is not None:
                 # 构建环境变量
                 env = self._get_spider_env(spider, task)
                 env["CRAWLHUB_OUTPUT_DIR"] = str(output_dir)
+
+                # 数据源连接信息注入
+                await self._inject_datasource_env(spider, env)
 
                 # 安装依赖
                 await self._install_requirements(spider, work_dir, env)

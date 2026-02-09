@@ -15,6 +15,12 @@ import type {
   DataListResponse,
   DataPreviewResponse,
   DataQueryParams,
+  DataSource,
+  DataSourceCreate,
+  DataSourceListResponse,
+  DataSourcesQueryParams,
+  DataSourceTestRequest,
+  DataSourceUpdate,
   Deployment,
   DeploymentListResponse,
   DeployRequest,
@@ -26,6 +32,9 @@ import type {
   ProjectUpdate,
   Spider,
   SpiderCreate,
+  SpiderDataSourceAssoc,
+  SpiderDataSourceCreate,
+  SpiderDataSourceUpdate,
   SpiderListResponse,
   SpidersQueryParams,
   SpiderTemplate,
@@ -370,6 +379,12 @@ export const useTasks = (params?: TasksQueryParams) => {
   return useQuery({
     queryKey: [NAME_SPACE, 'tasks', params],
     queryFn: () => get<TaskListResponse>(`/crawlhub/tasks`, { params }),
+    refetchInterval: (query) => {
+      const hasActive = query.state.data?.items?.some(
+        (t: CrawlHubTask) => t.status === 'pending' || t.status === 'running',
+      )
+      return hasActive ? 3000 : false
+    },
   })
 }
 
@@ -423,6 +438,130 @@ export const useDeleteData = () => {
       del(`/crawlhub/data?${new URLSearchParams(params as Record<string, string>).toString()}`),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: [NAME_SPACE, 'data'] })
+    },
+  })
+}
+
+// ============ DataSources API ============
+
+export const useDataSources = (params?: DataSourcesQueryParams) => {
+  return useQuery({
+    queryKey: [NAME_SPACE, 'datasources', params],
+    queryFn: () => get<DataSourceListResponse>('/crawlhub/datasources', { params }),
+  })
+}
+
+export const useDataSource = (id: string) => {
+  return useQuery({
+    queryKey: [NAME_SPACE, 'datasources', id],
+    queryFn: () => get<DataSource>(`/crawlhub/datasources/${id}`),
+    enabled: !!id,
+  })
+}
+
+export const useCreateDataSource = () => {
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationFn: (data: DataSourceCreate) => post<DataSource>('/crawlhub/datasources', { body: data }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: [NAME_SPACE, 'datasources'] })
+    },
+  })
+}
+
+export const useUpdateDataSource = () => {
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationFn: ({ id, data }: { id: string; data: DataSourceUpdate }) =>
+      put<DataSource>(`/crawlhub/datasources/${id}`, { body: data }),
+    onSuccess: (_, variables) => {
+      queryClient.invalidateQueries({ queryKey: [NAME_SPACE, 'datasources'] })
+      queryClient.invalidateQueries({ queryKey: [NAME_SPACE, 'datasources', variables.id] })
+    },
+  })
+}
+
+export const useDeleteDataSource = () => {
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationFn: (id: string) => del(`/crawlhub/datasources/${id}`),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: [NAME_SPACE, 'datasources'] })
+    },
+  })
+}
+
+export const useTestDataSourceConnection = () => {
+  return useMutation({
+    mutationFn: (id: string) => post<{ ok: boolean; message: string; latency_ms: number }>(`/crawlhub/datasources/${id}/test`, {}),
+  })
+}
+
+export const useTestDataSourceParams = () => {
+  return useMutation({
+    mutationFn: (data: DataSourceTestRequest) => post<{ ok: boolean; message: string; latency_ms: number }>('/crawlhub/datasources/test', { body: data }),
+  })
+}
+
+export const useStartDataSource = () => {
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationFn: (id: string) => post(`/crawlhub/datasources/${id}/start`, {}),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: [NAME_SPACE, 'datasources'] })
+    },
+  })
+}
+
+export const useStopDataSource = () => {
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationFn: (id: string) => post(`/crawlhub/datasources/${id}/stop`, {}),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: [NAME_SPACE, 'datasources'] })
+    },
+  })
+}
+
+// ============ Spider-DataSource Associations API ============
+
+export const useSpiderDataSources = (spiderId: string) => {
+  return useQuery({
+    queryKey: [NAME_SPACE, 'spider-datasources', spiderId],
+    queryFn: () => get<SpiderDataSourceAssoc[]>(`/crawlhub/spiders/${spiderId}/datasources`),
+    enabled: !!spiderId,
+  })
+}
+
+export const useAddSpiderDataSource = () => {
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationFn: ({ spiderId, data }: { spiderId: string; data: SpiderDataSourceCreate }) =>
+      post<SpiderDataSourceAssoc>(`/crawlhub/spiders/${spiderId}/datasources`, { body: data }),
+    onSuccess: (_, variables) => {
+      queryClient.invalidateQueries({ queryKey: [NAME_SPACE, 'spider-datasources', variables.spiderId] })
+    },
+  })
+}
+
+export const useUpdateSpiderDataSource = () => {
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationFn: ({ spiderId, assocId, data }: { spiderId: string; assocId: string; data: SpiderDataSourceUpdate }) =>
+      put<SpiderDataSourceAssoc>(`/crawlhub/spiders/${spiderId}/datasources/${assocId}`, { body: data }),
+    onSuccess: (_, variables) => {
+      queryClient.invalidateQueries({ queryKey: [NAME_SPACE, 'spider-datasources', variables.spiderId] })
+    },
+  })
+}
+
+export const useRemoveSpiderDataSource = () => {
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationFn: ({ spiderId, assocId }: { spiderId: string; assocId: string }) =>
+      del(`/crawlhub/spiders/${spiderId}/datasources/${assocId}`),
+    onSuccess: (_, variables) => {
+      queryClient.invalidateQueries({ queryKey: [NAME_SPACE, 'spider-datasources', variables.spiderId] })
     },
   })
 }

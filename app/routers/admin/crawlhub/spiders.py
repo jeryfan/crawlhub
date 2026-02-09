@@ -138,5 +138,9 @@ async def run_spider(
     if not spider:
         raise HTTPException(status_code=404, detail="爬虫不存在")
 
-    execute_spider.delay(spider_id, trigger_type="manual")
+    # 先创建任务记录，确保前端 refetch 后立即可见
+    runner = SpiderRunnerService(db)
+    task = await runner.create_task(spider, trigger_type="manual")
+
+    execute_spider.delay(spider_id, task_id=str(task.id), trigger_type="manual")
     return MessageResponse(msg="任务已提交到执行队列")

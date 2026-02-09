@@ -1,6 +1,6 @@
 import logging
 from celery import shared_task
-from models.engine import AsyncSessionLocal
+from models.engine import TaskSessionLocal, run_async
 from core.rag.extractor.extract_processor import ExtractProcessor
 from models.common import UploadFile
 from models.document import Document
@@ -9,9 +9,13 @@ logger = logging.getLogger(__name__)
 
 
 @shared_task
-async def document_extract(document_id: str):
+def document_extract(document_id: str):
     """异步文档提取任务"""
-    async with AsyncSessionLocal() as session:
+    run_async(_document_extract(document_id))
+
+
+async def _document_extract(document_id: str):
+    async with TaskSessionLocal() as session:
         document = await session.get(Document, document_id)
         if not document:
             raise ValueError(f"Document {document_id} not found")

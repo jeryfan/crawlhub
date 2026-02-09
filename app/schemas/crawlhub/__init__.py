@@ -21,6 +21,16 @@ from .internal import (
     CheckpointSave,
     CheckpointQuery,
 )
+from .datasource import (
+    DataSourceCreate,
+    DataSourceUpdate,
+    DataSourceResponse,
+    DataSourceListResponse,
+    DataSourceTestRequest,
+    SpiderDataSourceCreate,
+    SpiderDataSourceUpdate,
+    SpiderDataSourceResponse,
+)
 
 __all__ = [
     "ProjectCreate",
@@ -50,4 +60,12 @@ __all__ = [
     "HeartbeatReport",
     "CheckpointSave",
     "CheckpointQuery",
+    "DataSourceCreate",
+    "DataSourceUpdate",
+    "DataSourceResponse",
+    "DataSourceListResponse",
+    "DataSourceTestRequest",
+    "SpiderDataSourceCreate",
+    "SpiderDataSourceUpdate",
+    "SpiderDataSourceResponse",
 ]

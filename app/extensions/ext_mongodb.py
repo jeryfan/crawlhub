@@ -37,6 +37,9 @@ class MongoDBClient:
     def __init__(self) -> None:
         self._client: AsyncIOMotorClient | None = None
         self._db: AsyncIOMotorDatabase | None = None
+        self._db_name: str = ""
+        self._loop_id: int | None = None
+        self._enabled: bool = False
 
     def init_app(self, app: FastAPI) -> None:
         """Initialize MongoDB client from app config."""
@@ -45,9 +48,11 @@ class MongoDBClient:
             return
 
         try:
+            self._db_name = app_config.MONGODB_DATABASE
             self._client = self._create_client()
-            self._db = self._client[app_config.MONGODB_DATABASE]
-            logger.info(f"MongoDB client initialized for database: {app_config.MONGODB_DATABASE}")
+            self._db = self._client[self._db_name]
+            self._enabled = True
+            logger.info(f"MongoDB client initialized for database: {self._db_name}")
         except Exception as e:
             logger.error(f"Failed to initialize MongoDB client: {e}")
             raise
@@ -56,9 +61,30 @@ class MongoDBClient:
         """Create MongoDB client based on configuration."""
         return AsyncIOMotorClient(app_config.MONGODB_URI)
 
+    def _ensure_current_loop(self) -> None:
+        """在 Celery prefork worker 中，每次 asyncio.run() 会创建新的事件循环。
+        Motor 客户端绑定到创建时的事件循环，循环关闭后会报 'Event loop is closed'。
+        检测到事件循环变化时自动重建客户端。
+        """
+        if not self._enabled:
+            return
+        import asyncio
+        try:
+            loop = asyncio.get_running_loop()
+        except RuntimeError:
+            return
+        loop_id = id(loop)
+        if self._loop_id != loop_id:
+            if self._client is not None:
+                self._client.close()
+            self._client = self._create_client()
+            self._db = self._client[self._db_name]
+            self._loop_id = loop_id
+
     @property
     def client(self) -> AsyncIOMotorClient:
         """Get the MongoDB client instance."""
+        self._ensure_current_loop()
         if self._client is None:
             raise RuntimeError("MongoDB client not initialized. Call init_app() first.")
         return self._client
@@ -66,6 +92,7 @@ class MongoDBClient:
     @property
     def db(self) -> AsyncIOMotorDatabase:
         """Get the default database instance."""
+        self._ensure_current_loop()
         if self._db is None:
             raise RuntimeError("MongoDB database not initialized. Call init_app() first.")
         return self._db
@@ -76,7 +103,7 @@ class MongoDBClient:
 
     def is_enabled(self) -> bool:
         """Check if MongoDB is enabled and initialized."""
-        return self._client is not None
+        return self._enabled
 
     async def close(self) -> None:
         """Close the MongoDB client connection."""

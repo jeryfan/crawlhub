@@ -1,6 +1,8 @@
-from fastapi import APIRouter, HTTPException, Query
+from fastapi import APIRouter, Depends, HTTPException, Query
 from fastapi.responses import Response
+from sqlalchemy.ext.asyncio import AsyncSession
 
+from models.engine import get_db
 from schemas.response import ApiResponse, MessageResponse
 from services.crawlhub.data_service import DataService
 
@@ -14,9 +16,10 @@ async def list_data(
     is_test: bool | None = Query(None),
     page: int = Query(1, ge=1),
     page_size: int = Query(20, ge=1, le=100),
+    db: AsyncSession = Depends(get_db),
 ):
     """查询爬取数据"""
-    service = DataService()
+    service = DataService(db=db)
     items, total = await service.query(spider_id, task_id, is_test, page, page_size)
     total_pages = (total + page_size - 1) // page_size
 
@@ -44,9 +47,10 @@ async def preview_data(
 async def export_json(
     spider_id: str | None = Query(None),
     task_id: str | None = Query(None),
+    db: AsyncSession = Depends(get_db),
 ):
     """导出为 JSON"""
-    service = DataService()
+    service = DataService(db=db)
     content = await service.export_json(spider_id, task_id)
     return Response(
         content=content,
@@ -59,9 +63,10 @@ async def export_json(
 async def export_csv(
     spider_id: str | None = Query(None),
     task_id: str | None = Query(None),
+    db: AsyncSession = Depends(get_db),
 ):
     """导出为 CSV"""
-    service = DataService()
+    service = DataService(db=db)
     content = await service.export_csv(spider_id, task_id)
     return Response(
         content=content,

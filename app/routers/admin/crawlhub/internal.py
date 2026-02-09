@@ -48,30 +48,29 @@ async def ingest_items(
     """接收爬虫上报的数据项"""
     task = await _validate_task(data.task_id, data.spider_id, db)
 
-    if not mongodb_client.is_enabled():
-        raise HTTPException(status_code=503, detail="MongoDB 未启用")
-
-    collection = mongodb_client.get_collection("spider_data")
-
-    # Check dedup if enabled
     spider_result = await db.execute(
         select(Spider).where(Spider.id == data.spider_id)
     )
     spider = spider_result.scalar_one_or_none()
 
     items_to_insert = data.items
-    if spider and spider.dedup_enabled and spider.dedup_fields:
+
+    # 检查是否配置了外部数据源
+    has_datasources = await _has_active_datasources(db, data.spider_id)
+
+    # 去重检查（仅在写入默认 MongoDB 时生效）
+    if not has_datasources and spider and spider.dedup_enabled and spider.dedup_fields:
+        if not mongodb_client.is_enabled():
+            raise HTTPException(status_code=503, detail="MongoDB 未启用且未配置外部数据源")
+        collection = mongodb_client.get_collection("spider_data")
         dedup_fields = [f.strip() for f in spider.dedup_fields.split(",") if f.strip()]
         if dedup_fields:
             filtered = []
             for item in data.items:
-                # Compute dedup hash from specified fields
                 hash_parts = {k: item.get(k) for k in sorted(dedup_fields)}
                 dedup_hash = hashlib.md5(
                     json.dumps(hash_parts, sort_keys=True, default=str).encode()
                 ).hexdigest()
-
-                # Check if already exists
                 existing = await collection.find_one({
                     "spider_id": data.spider_id,
                     "dedup_hash": dedup_hash,
@@ -84,24 +83,33 @@ async def ingest_items(
     if not items_to_insert:
         return MessageResponse(msg="所有数据已去重，无新数据")
 
-    docs = []
-    for item in items_to_insert:
-        dedup_hash = item.pop("_dedup_hash", None)
-        doc = {
-            "task_id": data.task_id,
-            "spider_id": data.spider_id,
-            "data": item,
-            "is_test": task.is_test,
-            "created_at": datetime.utcnow(),
-        }
-        if dedup_hash:
-            doc["dedup_hash"] = dedup_hash
-        docs.append(doc)
+    count = len(items_to_insert)
 
-    await collection.insert_many(docs)
+    if has_datasources:
+        # 有外部数据源 → 只写外部数据源
+        await _fanout_to_datasources(db, data.spider_id, data.task_id, items_to_insert)
+    else:
+        # 无外部数据源 → 写默认 MongoDB
+        if not mongodb_client.is_enabled():
+            raise HTTPException(status_code=503, detail="MongoDB 未启用且未配置外部数据源")
 
-    # Atomic increment total_count to avoid race conditions
-    count = len(docs)
+        collection = mongodb_client.get_collection("spider_data")
+        docs = []
+        for item in items_to_insert:
+            dedup_hash = item.pop("_dedup_hash", None)
+            doc = {
+                "task_id": data.task_id,
+                "spider_id": data.spider_id,
+                "data": item,
+                "is_test": task.is_test,
+                "created_at": datetime.utcnow(),
+            }
+            if dedup_hash:
+                doc["dedup_hash"] = dedup_hash
+            docs.append(doc)
+        await collection.insert_many(docs)
+
+    # Atomic increment total_count
     await db.execute(
         text(
             "UPDATE crawlhub_tasks SET total_count = total_count + :n, "
@@ -211,3 +219,61 @@ async def get_checkpoint(
         return ApiResponse(data=None)
 
     return ApiResponse(data={"checkpoint_data": checkpoint, "task_id": str(task.id)})
+
+
+async def _has_active_datasources(db: AsyncSession, spider_id: str) -> bool:
+    """检查爬虫是否配置了活跃的外部数据源"""
+    from sqlalchemy import func
+
+    from models.crawlhub import DataSource, DataSourceStatus, SpiderDataSource
+
+    result = await db.execute(
+        select(func.count())
+        .select_from(SpiderDataSource)
+        .join(DataSource, SpiderDataSource.datasource_id == DataSource.id)
+        .where(
+            SpiderDataSource.spider_id == spider_id,
+            SpiderDataSource.is_enabled.is_(True),
+            DataSource.status == DataSourceStatus.ACTIVE,
+        )
+    )
+    return (result.scalar() or 0) > 0
+
+
+async def _fanout_to_datasources(
+    db: AsyncSession, spider_id: str, task_id: str, items: list[dict]
+) -> None:
+    """将数据扇出写入关联的外部数据源"""
+    import asyncio
+
+    from models.crawlhub import DataSource, DataSourceStatus, SpiderDataSource
+    from services.crawlhub.datasource_writer import get_writer
+
+    # 查询启用的关联数据源
+    result = await db.execute(
+        select(SpiderDataSource, DataSource)
+        .join(DataSource, SpiderDataSource.datasource_id == DataSource.id)
+        .where(
+            SpiderDataSource.spider_id == spider_id,
+            SpiderDataSource.is_enabled.is_(True),
+            DataSource.status == DataSourceStatus.ACTIVE,
+        )
+    )
+    rows = result.all()
+    if not rows:
+        return
+
+    semaphore = asyncio.Semaphore(5)
+
+    async def _write_to_ds(assoc: SpiderDataSource, datasource: DataSource):
+        async with semaphore:
+            try:
+                writer = get_writer(datasource)
+                await writer.write_items(items, task_id, spider_id, assoc.target_table)
+            except Exception as e:
+                logger.error(
+                    f"Failed to write to datasource {datasource.name} "
+                    f"(table={assoc.target_table}): {e}"
+                )
+
+    await asyncio.gather(*[_write_to_ds(assoc, ds) for assoc, ds in rows])

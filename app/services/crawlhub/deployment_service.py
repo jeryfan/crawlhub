@@ -109,6 +109,7 @@ class DeploymentService(BaseService):
             deploy_note=deploy_note,
         )
         self.db.add(deployment)
+        await self.db.flush()  # 生成 deployment.id（default 在 flush 时才触发）
 
         # 8. 更新 spider 的 active_deployment_id
         spider.active_deployment_id = deployment.id

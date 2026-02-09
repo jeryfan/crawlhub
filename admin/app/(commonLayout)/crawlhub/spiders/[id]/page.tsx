@@ -6,6 +6,7 @@ import {
   RiCodeLine,
   RiDatabase2Line,
   RiExternalLinkLine,
+  RiHardDriveLine,
   RiLoader4Line,
   RiPlayLine,
   RiRocketLine,
@@ -26,18 +27,20 @@ import {
   useWorkspaceStatus,
 } from '@/service/use-crawlhub'
 import DataTab from './tabs/data-tab'
+import DataSourcesTab from './tabs/datasources-tab'
 import DeploymentsTab from './tabs/deployments-tab'
 import SettingsTab from './tabs/settings-tab'
 import TasksTab from './tabs/tasks-tab'
 import WorkspaceTab from './tabs/workspace-tab'
 
-type TabKey = 'workspace' | 'deployments' | 'tasks' | 'data' | 'settings'
+type TabKey = 'workspace' | 'deployments' | 'tasks' | 'data' | 'datasources' | 'settings'
 
 const tabsList: { key: TabKey; label: string; icon: React.ReactNode }[] = [
   { key: 'workspace', label: '开发', icon: <RiCodeLine className="h-4 w-4" /> },
   { key: 'deployments', label: '部署', icon: <RiRocketLine className="h-4 w-4" /> },
   { key: 'tasks', label: '任务', icon: <RiTaskLine className="h-4 w-4" /> },
   { key: 'data', label: '数据', icon: <RiDatabase2Line className="h-4 w-4" /> },
+  { key: 'datasources', label: '数据源', icon: <RiHardDriveLine className="h-4 w-4" /> },
   { key: 'settings', label: '设置', icon: <RiSettings3Line className="h-4 w-4" /> },
 ]
 
@@ -293,7 +296,12 @@ const SpiderDetailPage = () => {
         )}
         {mountedTabs.has('data') && (
           <div className={activeTab !== 'data' ? 'hidden' : 'h-full'}>
-            <DataTab spiderId={spiderId} />
+            <DataTab spiderId={spiderId} isActive={activeTab === 'data'} />
+          </div>
+        )}
+        {mountedTabs.has('datasources') && (
+          <div className={activeTab !== 'datasources' ? 'hidden' : 'h-full'}>
+            <DataSourcesTab spiderId={spiderId} />
           </div>
         )}
         {mountedTabs.has('settings') && (

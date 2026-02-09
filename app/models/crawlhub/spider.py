@@ -23,6 +23,7 @@ class Spider(DefaultFieldsMixin, Base):
     project_id: Mapped[str] = mapped_column(StringUUID, nullable=False)
     name: Mapped[str] = mapped_column(String(255), nullable=False, comment="爬虫名称")
     description: Mapped[str | None] = mapped_column(Text, nullable=True, comment="爬虫描述")
+    start_url: Mapped[str | None] = mapped_column(String(2000), nullable=True, comment="目标抓取URL")
     script_content: Mapped[str | None] = mapped_column(Text, nullable=True, comment="脚本内容")
     is_active: Mapped[bool] = mapped_column(Boolean, default=True, comment="是否启用")
     cron_expr: Mapped[str | None] = mapped_column(String(100), nullable=True, comment="Cron表达式")

@@ -5,6 +5,9 @@ import logging
 from datetime import datetime
 from typing import Any
 
+from sqlalchemy import select, func
+from sqlalchemy.ext.asyncio import AsyncSession
+
 from extensions.ext_mongodb import mongodb_client
 
 logger = logging.getLogger(__name__)
@@ -13,13 +16,32 @@ SPIDER_DATA_COLLECTION = "spider_data"
 SPIDER_DATA_TTL_DAYS = 90
 
 
+async def _get_spider_datasource_info(
+    db: AsyncSession, spider_id: str
+) -> list[tuple]:
+    """查询爬虫关联的活跃外部数据源，返回 [(DataSource, target_table), ...]"""
+    from models.crawlhub import DataSource, DataSourceStatus, SpiderDataSource
+
+    result = await db.execute(
+        select(DataSource, SpiderDataSource.target_table)
+        .join(SpiderDataSource, SpiderDataSource.datasource_id == DataSource.id)
+        .where(
+            SpiderDataSource.spider_id == spider_id,
+            SpiderDataSource.is_enabled.is_(True),
+            DataSource.status == DataSourceStatus.ACTIVE,
+        )
+    )
+    return result.all()
+
+
 class DataService:
     """爬取数据查询和导出服务"""
 
     _indexes_created = False
 
-    def __init__(self):
+    def __init__(self, db: AsyncSession | None = None):
         self._collection = None
+        self._db = db
 
     @property
     def collection(self):
@@ -48,6 +70,40 @@ class DataService:
         except Exception as e:
             logger.warning(f"Failed to create spider_data indexes: {e}")
 
+    async def _try_read_from_datasource(
+        self,
+        spider_id: str,
+        task_id: str | None,
+        is_test: bool | None,
+        page: int,
+        page_size: int,
+    ) -> tuple[list[dict], int] | None:
+        """尝试从外部数据源读取，如果没有配置则返回 None"""
+        if not self._db or not spider_id:
+            return None
+
+        ds_rows = await _get_spider_datasource_info(self._db, spider_id)
+        if not ds_rows:
+            return None
+
+        from services.crawlhub.datasource_writer import get_writer
+
+        # 从第一个活跃数据源读取
+        datasource, target_table = ds_rows[0]
+        try:
+            writer = get_writer(datasource)
+            return await writer.read_items(
+                target_table,
+                spider_id=spider_id,
+                task_id=task_id,
+                is_test=is_test,
+                page=page,
+                page_size=page_size,
+            )
+        except Exception as e:
+            logger.error(f"Failed to read from datasource {datasource.name}: {e}")
+            return None
+
     async def query(
         self,
         spider_id: str | None = None,
@@ -57,6 +113,15 @@ class DataService:
         page_size: int = 20,
     ) -> tuple[list[dict], int]:
         """分页查询爬取数据"""
+        # 优先从外部数据源读取
+        if spider_id:
+            ds_result = await self._try_read_from_datasource(
+                spider_id, task_id, is_test, page, page_size
+            )
+            if ds_result is not None:
+                return ds_result
+
+        # 回退到默认 MongoDB
         if not mongodb_client.is_enabled():
             return [], 0
 
@@ -98,6 +163,16 @@ class DataService:
         task_id: str | None = None,
     ) -> str:
         """导出为 JSON 字符串"""
+        # 尝试从外部数据源读取全部数据
+        if spider_id:
+            ds_result = await self._try_read_from_datasource(
+                spider_id, task_id, None, 1, 100000
+            )
+            if ds_result is not None:
+                items, _ = ds_result
+                export_items = [item.get("data", item) for item in items]
+                return json.dumps(export_items, ensure_ascii=False, indent=2, default=str)
+
         if not mongodb_client.is_enabled():
             return "[]"
 
@@ -127,6 +202,32 @@ class DataService:
         task_id: str | None = None,
     ) -> str:
         """导出为 CSV 字符串"""
+        # 尝试从外部数据源读取
+        if spider_id:
+            ds_result = await self._try_read_from_datasource(
+                spider_id, task_id, None, 1, 100000
+            )
+            if ds_result is not None:
+                items, _ = ds_result
+                rows = []
+                all_keys: set[str] = set()
+                for item in items:
+                    data = item.get("data", {})
+                    if isinstance(data, dict):
+                        all_keys.update(data.keys())
+                        rows.append(data)
+                    else:
+                        rows.append({"value": data})
+                        all_keys.add("value")
+                if not rows:
+                    return ""
+                output = io.StringIO()
+                fieldnames = sorted(all_keys)
+                writer = csv.DictWriter(output, fieldnames=fieldnames, extrasaction="ignore")
+                writer.writeheader()
+                writer.writerows(rows)
+                return output.getvalue()
+
         if not mongodb_client.is_enabled():
             return ""
 
@@ -169,15 +270,7 @@ class DataService:
         task_id: str,
         limit: int = 20,
     ) -> dict:
-        """数据预览：返回结构化的数据摘要
-
-        Returns:
-            {
-                "items": [...],
-                "total": int,
-                "fields": {字段名: {"type": str, "non_null_count": int, "sample": Any}},
-            }
-        """
+        """数据预览：返回结构化的数据摘要"""
         if not mongodb_client.is_enabled():
             return {"items": [], "total": 0, "fields": {}}
 

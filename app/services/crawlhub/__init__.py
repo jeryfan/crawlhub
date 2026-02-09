@@ -11,6 +11,9 @@ from .alert_service import AlertService
 from .webhook_service import WebhookService
 from .worker_service import WorkerService
 from .deployment_service import DeploymentService
+from .datasource_service import DataSourceService
+from .spider_datasource_service import SpiderDataSourceService
+from .docker_datasource_service import DockerDataSourceManager
 
 __all__ = [
     "ProjectService",
@@ -28,4 +31,7 @@ __all__ = [
     "WebhookService",
     "WorkerService",
     "DeploymentService",
+    "DataSourceService",
+    "SpiderDataSourceService",
+    "DockerDataSourceManager",
 ]

@@ -2,6 +2,7 @@ from collections.abc import AsyncGenerator
 
 from sqlalchemy import MetaData, text
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
+from sqlalchemy.pool import NullPool
 
 from configs import app_config
 
@@ -19,6 +20,26 @@ AsyncSessionLocal = async_sessionmaker(
     autocommit=False,
     autoflush=False,
 )
+
+# Engine for Celery tasks — NullPool avoids event loop binding issues
+_task_engine = create_async_engine(
+    str(app_config.SQLALCHEMY_DATABASE_URI),
+    poolclass=NullPool,
+)
+
+TaskSessionLocal = async_sessionmaker(
+    _task_engine,
+    class_=AsyncSession,
+    expire_on_commit=False,
+    autocommit=False,
+    autoflush=False,
+)
+
+
+def run_async(coro):
+    """Run an async coroutine in Celery worker context (prefork pool)."""
+    import asyncio
+    return asyncio.run(coro)
 
 
 # Dependency injection function
@@ -47,6 +68,7 @@ metadata = MetaData(naming_convention=INDEXES_NAMING_CONVENTION)
 __all__ = [
     "AsyncSession",
     "AsyncSessionLocal",
+    "TaskSessionLocal",
     "engine",
     "get_db",
     "metadata",

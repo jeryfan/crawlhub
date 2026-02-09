@@ -6,7 +6,7 @@ from celery import shared_task
 from sqlalchemy import select, update
 
 from configs import app_config
-from models.engine import AsyncSessionLocal
+from models.engine import TaskSessionLocal, run_async
 from models.account import Tenant
 from models.billing import (
     BalanceLog,
@@ -25,9 +25,13 @@ logger = logging.getLogger(__name__)
 
 
 @shared_task
-async def expire_recharge_orders():
+def expire_recharge_orders():
     """定时任务：过期充值订单处理（每分钟执行）"""
-    async with AsyncSessionLocal() as session:
+    return run_async(_expire_recharge_orders())
+
+
+async def _expire_recharge_orders():
+    async with TaskSessionLocal() as session:
         now = datetime.utcnow()
 
         # 查找所有已过期但状态仍为 pending 的订单
@@ -51,9 +55,13 @@ async def expire_recharge_orders():
 
 
 @shared_task
-async def process_subscription_expiry():
+def process_subscription_expiry():
     """定时任务：订阅到期处理（每小时执行）"""
-    async with AsyncSessionLocal() as session:
+    return run_async(_process_subscription_expiry())
+
+
+async def _process_subscription_expiry():
+    async with TaskSessionLocal() as session:
         now = datetime.utcnow()
 
         # 查找所有到期的租户（非 basic 计划）
@@ -147,9 +155,13 @@ async def process_subscription_expiry():
 
 
 @shared_task
-async def send_expiry_reminders():
+def send_expiry_reminders():
     """定时任务：订阅到期提醒（每天执行）"""
-    async with AsyncSessionLocal() as session:
+    return run_async(_send_expiry_reminders())
+
+
+async def _send_expiry_reminders():
+    async with TaskSessionLocal() as session:
         now = datetime.utcnow()
         remind_before = now + timedelta(days=3)  # 提前3天提醒
 
@@ -175,9 +187,13 @@ async def send_expiry_reminders():
 
 
 @shared_task
-async def process_pending_plan_changes():
+def process_pending_plan_changes():
     """定时任务：处理待执行的计划变更（每小时执行）"""
-    async with AsyncSessionLocal() as session:
+    return run_async(_process_pending_plan_changes())
+
+
+async def _process_pending_plan_changes():
+    async with TaskSessionLocal() as session:
         now = datetime.utcnow()
 
         # 查找所有到期的待执行降级请求

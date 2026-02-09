@@ -11,6 +11,7 @@ from .workers import router as workers_router
 from .dashboard import router as dashboard_router
 from .deployments import router as deployments_router
 from .internal import router as internal_router
+from .datasources import router as datasources_router
 
 router = APIRouter(prefix="/crawlhub")
 router.include_router(projects_router)
@@ -24,3 +25,4 @@ router.include_router(workers_router)
 router.include_router(dashboard_router)
 router.include_router(deployments_router)
 router.include_router(internal_router)
+router.include_router(datasources_router)
