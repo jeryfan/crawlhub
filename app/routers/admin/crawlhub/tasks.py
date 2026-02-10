@@ -1,9 +1,13 @@
+import asyncio
+import json
+
 from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi.responses import StreamingResponse
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from models.crawlhub import SpiderTask, SpiderTaskStatus
-from models.engine import get_db
+from models.engine import AsyncSessionLocal, get_db
 from schemas.crawlhub import TaskResponse
 from schemas.platform import PaginatedResponse
 from schemas.response import ApiResponse, MessageResponse
@@ -93,3 +97,74 @@ async def cancel_task(
     task.status = SpiderTaskStatus.CANCELLED
     await db.commit()
     return MessageResponse(msg="任务已取消")
+
+
+TERMINAL_STATUSES = {SpiderTaskStatus.COMPLETED, SpiderTaskStatus.FAILED, SpiderTaskStatus.CANCELLED}
+
+
+@router.get("/{task_id}/events")
+async def task_events(
+    task_id: str,
+    db: AsyncSession = Depends(get_db),
+):
+    """SSE endpoint for real-time task status updates"""
+    # Verify task exists
+    result = await db.execute(
+        select(SpiderTask).where(SpiderTask.id == task_id)
+    )
+    task = result.scalar_one_or_none()
+    if not task:
+        raise HTTPException(status_code=404, detail="任务不存在")
+
+    async def event_generator():
+        last_status = None
+        last_progress = None
+
+        while True:
+            async with AsyncSessionLocal() as session:
+                result = await session.execute(
+                    select(SpiderTask).where(SpiderTask.id == task_id)
+                )
+                task = result.scalar_one_or_none()
+
+                if not task:
+                    yield f"data: {json.dumps({'error': '任务不存在'})}\n\n"
+                    return
+
+                current_status = task.status.value
+                current_progress = task.progress
+
+                # Only send event if status or progress changed
+                if current_status != last_status or current_progress != last_progress:
+                    event_data = {
+                        "task_id": task.id,
+                        "status": current_status,
+                        "progress": current_progress,
+                        "total_count": task.total_count,
+                        "success_count": task.success_count,
+                        "failed_count": task.failed_count,
+                        "items_per_second": task.items_per_second,
+                        "error_message": task.error_message,
+                        "started_at": task.started_at.isoformat() if task.started_at else None,
+                        "finished_at": task.finished_at.isoformat() if task.finished_at else None,
+                    }
+                    yield f"data: {json.dumps(event_data, ensure_ascii=False)}\n\n"
+
+                    last_status = current_status
+                    last_progress = current_progress
+
+                    # If terminal status, send final event and close
+                    if task.status in TERMINAL_STATUSES:
+                        return
+
+            await asyncio.sleep(2)
+
+    return StreamingResponse(
+        event_generator(),
+        media_type="text/event-stream",
+        headers={
+            "Cache-Control": "no-cache",
+            "Connection": "keep-alive",
+            "X-Accel-Buffering": "no",
+        },
+    )

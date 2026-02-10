@@ -6,6 +6,8 @@ from .alert import Alert, AlertLevel
 from .deployment import Deployment, DeploymentStatus
 from .datasource import DataSource, DataSourceType, DataSourceMode, DataSourceStatus
 from .spider_datasource import SpiderDataSource
+from .notification_channel import NotificationChannelConfig, NotificationChannelType
+from .alert_rule import AlertRule, AlertRuleType
 
 __all__ = [
     "Project",
@@ -25,4 +27,8 @@ __all__ = [
     "DataSourceMode",
     "DataSourceStatus",
     "SpiderDataSource",
+    "NotificationChannelConfig",
+    "NotificationChannelType",
+    "AlertRule",
+    "AlertRuleType",
 ]

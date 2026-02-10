@@ -79,6 +79,9 @@ class Spider(DefaultFieldsMixin, Base):
     dedup_fields: Mapped[str | None] = mapped_column(
         String(500), nullable=True, comment="去重字段(逗号分隔)"
     )
+    item_schema: Mapped[str | None] = mapped_column(
+        Text, nullable=True, comment="数据 Schema (JSON Schema 格式)"
+    )
 
     def __repr__(self) -> str:
         return f"<Spider {self.name}>"

@@ -100,6 +100,8 @@ def init_app(app: FastAPI) -> Celery:
         "tasks.spider_tasks",
         "tasks.proxy_tasks",
         "tasks.datasource_tasks",
+        "tasks.data_tasks",
+        "tasks.alert_tasks",
     ]
     day = app_config.CELERY_BEAT_SCHEDULER_TIME
 
@@ -149,6 +151,16 @@ def init_app(app: FastAPI) -> Celery:
         "crawlhub.check_datasource_health": {
             "task": "tasks.datasource_tasks.check_datasource_health",
             "schedule": crontab(minute="*/5"),  # 每5分钟检查
+        },
+        # 数据归档
+        "crawlhub.archive_expiring_data": {
+            "task": "tasks.data_tasks.archive_expiring_data",
+            "schedule": crontab(minute="0", hour="3"),  # Daily at 3 AM
+        },
+        # 告警规则评估
+        "crawlhub.evaluate_alert_rules": {
+            "task": "tasks.alert_tasks.evaluate_alert_rules",
+            "schedule": crontab(minute="*/2"),  # 每2分钟评估
         },
     }
 

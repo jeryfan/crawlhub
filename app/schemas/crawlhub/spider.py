@@ -29,6 +29,7 @@ class SpiderBase(BaseModel):
     # 数据去重
     dedup_enabled: bool | None = Field(None, description="启用去重")
     dedup_fields: str | None = Field(None, description="去重字段(逗号分隔)")
+    item_schema: str | None = Field(None, description="数据 Schema (JSON Schema 格式)")
 
 
 class SpiderCreate(SpiderBase):
@@ -56,6 +57,7 @@ class SpiderUpdate(BaseModel):
     autothrottle_enabled: bool | None = None
     dedup_enabled: bool | None = None
     dedup_fields: str | None = None
+    item_schema: str | None = None
 
 
 class SpiderResponse(SpiderBase):

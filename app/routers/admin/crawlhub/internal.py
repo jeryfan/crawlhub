@@ -3,7 +3,7 @@ import json
 import logging
 from datetime import datetime
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, File, Form, HTTPException, UploadFile
 from sqlalchemy import select, text
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -15,6 +15,7 @@ from schemas.crawlhub.internal import (
     HeartbeatReport,
     ItemsIngestRequest,
     ProgressReport,
+    ProxyRotateResponse,
 )
 from schemas.response import ApiResponse, MessageResponse
 
@@ -54,6 +55,42 @@ async def ingest_items(
     spider = spider_result.scalar_one_or_none()
 
     items_to_insert = data.items
+
+    # Schema validation
+    if spider and spider.item_schema:
+        try:
+            schema = json.loads(spider.item_schema)
+            required_fields = schema.get("required", [])
+            properties = schema.get("properties", {})
+            type_map = {"string": str, "number": (int, float), "integer": int, "boolean": bool, "array": list, "object": dict}
+
+            validated_items = []
+            for item in items_to_insert:
+                valid = True
+                # Check required fields
+                for field in required_fields:
+                    if field not in item or item[field] is None:
+                        logger.warning(f"Item missing required field '{field}', skipping")
+                        valid = False
+                        break
+                if not valid:
+                    continue
+                # Check types
+                for field, field_schema in properties.items():
+                    if field in item and item[field] is not None:
+                        expected_type = type_map.get(field_schema.get("type"))
+                        if expected_type and not isinstance(item[field], expected_type):
+                            logger.warning(f"Item field '{field}' type mismatch, skipping")
+                            valid = False
+                            break
+                if valid:
+                    validated_items.append(item)
+
+            items_to_insert = validated_items
+            if not items_to_insert:
+                return MessageResponse(msg="所有数据未通过 Schema 校验")
+        except json.JSONDecodeError:
+            logger.warning(f"Invalid item_schema for spider {data.spider_id}")
 
     # 检查是否配置了外部数据源
     has_datasources = await _has_active_datasources(db, data.spider_id)
@@ -221,6 +258,21 @@ async def get_checkpoint(
     return ApiResponse(data={"checkpoint_data": checkpoint, "task_id": str(task.id)})
 
 
+@router.get("/task/status")
+async def get_task_status(
+    task_id: str,
+    db: AsyncSession = Depends(get_db),
+):
+    """获取任务状态（供 SDK 心跳检查取消）"""
+    result = await db.execute(
+        select(SpiderTask).where(SpiderTask.id == task_id)
+    )
+    task = result.scalar_one_or_none()
+    if not task:
+        raise HTTPException(status_code=404, detail="任务不存在")
+    return ApiResponse(data={"status": task.status.value, "task_id": str(task.id)})
+
+
 async def _has_active_datasources(db: AsyncSession, spider_id: str) -> bool:
     """检查爬虫是否配置了活跃的外部数据源"""
     from sqlalchemy import func
@@ -277,3 +329,65 @@ async def _fanout_to_datasources(
                 )
 
     await asyncio.gather(*[_write_to_ds(assoc, ds) for assoc, ds in rows])
+
+
+@router.get("/proxy/rotate", response_model=ApiResponse)
+async def rotate_proxy(
+    task_id: str,
+    spider_id: str,
+    failed_proxy: str | None = None,
+    db: AsyncSession = Depends(get_db),
+):
+    """代理轮换 - SDK 请求新的可用代理"""
+    # Validate task
+    task = await _validate_task(task_id, spider_id, db)
+
+    # Report failed proxy if provided
+    if failed_proxy:
+        from services.crawlhub.proxy_service import ProxyService
+        proxy_service = ProxyService(db)
+        # Find the proxy by URL pattern and report failure
+        from sqlalchemy import select
+        from models.crawlhub.proxy import Proxy
+        # Simple search by host:port in the failed_proxy URL
+        proxies_result = await db.execute(select(Proxy))
+        for proxy in proxies_result.scalars().all():
+            if proxy.url and proxy.url in failed_proxy:
+                await proxy_service.report_result(str(proxy.id), success=False)
+                break
+
+    # Get new proxy
+    from services.crawlhub.proxy_service import ProxyService
+    proxy_service = ProxyService(db)
+    proxy = await proxy_service.get_available_proxy(min_success_rate=0.5)
+
+    if not proxy:
+        return ApiResponse(data={"proxy_url": None, "message": "无可用代理"})
+
+    # Build proxy URL
+    auth = ""
+    if proxy.username and proxy.password:
+        auth = f"{proxy.username}:{proxy.password}@"
+    proxy_url = f"{proxy.protocol}://{auth}{proxy.host}:{proxy.port}"
+
+    return ApiResponse(data={"proxy_url": proxy_url, "message": "代理轮换成功"})
+
+
+@router.post("/files/upload", response_model=MessageResponse)
+async def upload_file(
+    task_id: str = Form(...),
+    spider_id: str = Form(...),
+    filename: str = Form(...),
+    file: UploadFile = File(...),
+    db: AsyncSession = Depends(get_db),
+):
+    """接收爬虫上传的文件"""
+    await _validate_task(task_id, spider_id, db)
+
+    from extensions.ext_storage import storage
+
+    content = await file.read()
+    storage_path = f"spider_files/{spider_id}/{task_id}/{filename}"
+    await storage.save(storage_path, content)
+
+    return MessageResponse(msg=f"文件已上传: {storage_path}")

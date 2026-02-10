@@ -19,6 +19,16 @@ SDK_SOURCE_PATH = Path(__file__).parent.parent.parent / "libs" / "crawlhub_sdk" 
 
 class SpiderRunnerService(BaseService):
 
+    @staticmethod
+    def _make_preexec_fn(memory_limit_mb: int | None = None):
+        """Create preexec_fn for subprocess resource limits"""
+        def preexec():
+            import resource
+            if memory_limit_mb:
+                limit_bytes = memory_limit_mb * 1024 * 1024
+                resource.setrlimit(resource.RLIMIT_AS, (limit_bytes, limit_bytes))
+        return preexec if memory_limit_mb else None
+
     async def create_test_task(self, spider: Spider) -> SpiderTask:
         """创建测试任务"""
         task = SpiderTask(
@@ -233,28 +243,66 @@ class SpiderRunnerService(BaseService):
 
                 cmd = self._build_command(spider, work_dir)
 
+                preexec = self._make_preexec_fn(spider.memory_limit_mb)
                 process = await asyncio.create_subprocess_exec(
                     *cmd,
                     cwd=str(work_dir),
                     stdout=asyncio.subprocess.PIPE,
                     stderr=asyncio.subprocess.PIPE,
                     env=env,
+                    preexec_fn=preexec,
                 )
 
                 timeout = spider.timeout_seconds or 300
-                try:
-                    stdout, stderr = await asyncio.wait_for(
-                        process.communicate(), timeout=timeout
-                    )
-                except asyncio.TimeoutError:
-                    process.kill()
-                    task.status = SpiderTaskStatus.FAILED
-                    task.error_message = f"执行超时 (最大 {timeout} 秒)"
-                    task.error_category = "system"
-                    return
+                deadline = asyncio.get_event_loop().time() + timeout
 
-                stdout_str = stdout.decode("utf-8", errors="replace") if stdout else ""
-                stderr_str = stderr.decode("utf-8", errors="replace") if stderr else ""
+                # Start reading streams concurrently
+                async def read_stream(stream):
+                    chunks = []
+                    while True:
+                        chunk = await stream.read(8192)
+                        if not chunk:
+                            break
+                        chunks.append(chunk)
+                    return b"".join(chunks)
+
+                stdout_task = asyncio.create_task(read_stream(process.stdout))
+                stderr_task = asyncio.create_task(read_stream(process.stderr))
+
+                # Poll for completion or cancellation
+                while process.returncode is None:
+                    try:
+                        await asyncio.wait_for(asyncio.shield(process.wait()), timeout=5.0)
+                    except asyncio.TimeoutError:
+                        pass
+
+                    if process.returncode is not None:
+                        break
+
+                    # Check timeout
+                    if asyncio.get_event_loop().time() > deadline:
+                        process.kill()
+                        await process.wait()
+                        task.status = SpiderTaskStatus.FAILED
+                        task.error_message = f"执行超时 (最大 {timeout} 秒)"
+                        task.error_category = "system"
+                        return
+
+                    # Check cancellation
+                    await self.db.refresh(task)
+                    if task.status == SpiderTaskStatus.CANCELLED:
+                        process.terminate()
+                        await asyncio.sleep(2)
+                        if process.returncode is None:
+                            process.kill()
+                        await process.wait()
+                        task.error_message = "任务被用户取消"
+                        return
+
+                stdout_data = await stdout_task
+                stderr_data = await stderr_task
+                stdout_str = stdout_data.decode("utf-8", errors="replace")
+                stderr_str = stderr_data.decode("utf-8", errors="replace")
 
                 if process.returncode == 0:
                     await self._store_spider_data(task, stdout_str)

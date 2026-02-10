@@ -26,3 +26,8 @@ class CheckpointSave(BaseModel):
 
 class CheckpointQuery(BaseModel):
     spider_id: str
+
+
+class ProxyRotateResponse(BaseModel):
+    proxy_url: str | None = None
+    message: str = ""

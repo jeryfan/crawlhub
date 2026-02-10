@@ -1,0 +1,798 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>CrawlHub Architecture</title>
+<style>
+  :root {
+    --bg: #0f1117;
+    --surface: #1a1d27;
+    --surface2: #232733;
+    --border: #2e3345;
+    --text: #e1e4ed;
+    --text-dim: #8b90a0;
+    --accent: #6c8dfa;
+    --accent2: #a78bfa;
+    --green: #34d399;
+    --orange: #fb923c;
+    --red: #f87171;
+    --cyan: #22d3ee;
+    --pink: #f472b6;
+    --yellow: #fbbf24;
+  }
+
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: -apple-system, BlinkMacSystemFont, 'SF Pro Text', 'Segoe UI', system-ui, sans-serif;
+    padding: 40px;
+    min-width: 1400px;
+  }
+
+  h1 {
+    text-align: center;
+    font-size: 28px;
+    font-weight: 700;
+    margin-bottom: 8px;
+    background: linear-gradient(135deg, var(--accent), var(--accent2));
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+  }
+
+  .subtitle {
+    text-align: center;
+    color: var(--text-dim);
+    font-size: 14px;
+    margin-bottom: 48px;
+  }
+
+  .diagram {
+    max-width: 1600px;
+    margin: 0 auto;
+    position: relative;
+  }
+
+  /* ---- Layer ---- */
+  .layer {
+    margin-bottom: 24px;
+    position: relative;
+  }
+
+  .layer-label {
+    position: absolute;
+    left: -8px;
+    top: 50%;
+    transform: translateY(-50%) rotate(-90deg);
+    font-size: 11px;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 2px;
+    color: var(--text-dim);
+    white-space: nowrap;
+    z-index: 2;
+  }
+
+  .layer-content {
+    margin-left: 36px;
+    display: flex;
+    gap: 16px;
+    flex-wrap: wrap;
+  }
+
+  /* ---- Box ---- */
+  .box {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 20px;
+    flex: 1;
+    min-width: 200px;
+    position: relative;
+    transition: border-color .2s;
+  }
+  .box:hover { border-color: var(--accent); }
+
+  .box-title {
+    font-size: 13px;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 1px;
+    margin-bottom: 14px;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+
+  .dot {
+    width: 8px; height: 8px;
+    border-radius: 50%;
+    display: inline-block;
+    flex-shrink: 0;
+  }
+
+  .tag {
+    display: inline-block;
+    padding: 3px 8px;
+    border-radius: 6px;
+    font-size: 11px;
+    font-weight: 500;
+    margin: 2px 4px 2px 0;
+    border: 1px solid;
+  }
+
+  .item {
+    font-size: 12.5px;
+    color: var(--text-dim);
+    padding: 4px 0;
+    display: flex;
+    align-items: flex-start;
+    gap: 6px;
+    line-height: 1.5;
+  }
+  .item code {
+    font-family: 'JetBrains Mono', 'Fira Code', 'SF Mono', monospace;
+    font-size: 11.5px;
+    background: var(--surface2);
+    padding: 1px 6px;
+    border-radius: 4px;
+    color: var(--cyan);
+    white-space: nowrap;
+  }
+
+  .item .label {
+    color: var(--text);
+    font-weight: 500;
+    white-space: nowrap;
+  }
+
+  /* ---- Colors ---- */
+  .c-blue   { color: var(--accent); border-color: rgba(108,141,250,.3); background: rgba(108,141,250,.08); }
+  .c-green  { color: var(--green);  border-color: rgba(52,211,153,.3);  background: rgba(52,211,153,.08); }
+  .c-orange { color: var(--orange); border-color: rgba(251,146,60,.3);  background: rgba(251,146,60,.08); }
+  .c-red    { color: var(--red);    border-color: rgba(248,113,113,.3); background: rgba(248,113,113,.08); }
+  .c-cyan   { color: var(--cyan);   border-color: rgba(34,211,238,.3);  background: rgba(34,211,238,.08); }
+  .c-purple { color: var(--accent2);border-color: rgba(167,139,250,.3); background: rgba(167,139,250,.08); }
+  .c-pink   { color: var(--pink);   border-color: rgba(244,114,182,.3); background: rgba(244,114,182,.08); }
+  .c-yellow { color: var(--yellow); border-color: rgba(251,191,36,.3);  background: rgba(251,191,36,.08); }
+
+  .dot-blue   { background: var(--accent); }
+  .dot-green  { background: var(--green); }
+  .dot-orange { background: var(--orange); }
+  .dot-red    { background: var(--red); }
+  .dot-cyan   { background: var(--cyan); }
+  .dot-purple { background: var(--accent2); }
+  .dot-pink   { background: var(--pink); }
+  .dot-yellow { background: var(--yellow); }
+
+  .border-blue   { border-color: rgba(108,141,250,.35); }
+  .border-green  { border-color: rgba(52,211,153,.35); }
+  .border-orange { border-color: rgba(251,146,60,.35); }
+  .border-red    { border-color: rgba(248,113,113,.35); }
+  .border-cyan   { border-color: rgba(34,211,238,.35); }
+  .border-purple { border-color: rgba(167,139,250,.35); }
+  .border-pink   { border-color: rgba(244,114,182,.35); }
+
+  /* ---- Arrow connector ---- */
+  .connector {
+    display: flex;
+    justify-content: center;
+    padding: 8px 0;
+    margin-left: 36px;
+  }
+  .connector svg { display: block; }
+
+  /* ---- Flex helpers ---- */
+  .row { display: flex; gap: 16px; }
+  .col { display: flex; flex-direction: column; gap: 16px; flex: 1; }
+
+  .w2 { flex: 2; }
+  .w3 { flex: 3; }
+  .w4 { flex: 4; }
+
+  .grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+  .grid-3 { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 8px; }
+
+  /* Section divider */
+  .divider {
+    margin: 16px 0 16px 36px;
+    height: 1px;
+    background: linear-gradient(90deg, transparent, var(--border), transparent);
+  }
+
+  /* Arrow labels */
+  .arrow-row {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 40px;
+    padding: 6px 0;
+    margin-left: 36px;
+  }
+  .arrow-item {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 11px;
+    color: var(--text-dim);
+  }
+  .arrow-item svg { flex-shrink: 0; }
+
+  /* Legend */
+  .legend {
+    margin-top: 40px;
+    margin-left: 36px;
+    display: flex;
+    flex-wrap: wrap;
+    gap: 20px;
+    padding: 16px 20px;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+  }
+  .legend-item {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 11.5px;
+    color: var(--text-dim);
+  }
+
+  /* Mini section inside box */
+  .mini-section {
+    margin-top: 10px;
+    padding-top: 8px;
+    border-top: 1px dashed var(--border);
+  }
+  .mini-title {
+    font-size: 10.5px;
+    text-transform: uppercase;
+    letter-spacing: 1px;
+    color: var(--text-dim);
+    margin-bottom: 6px;
+    font-weight: 600;
+  }
+
+  /* Flow section */
+  .flow-section {
+    margin: 48px 0 0 36px;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 24px;
+  }
+  .flow-title {
+    font-size: 14px;
+    font-weight: 700;
+    margin-bottom: 20px;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+  .flow-steps {
+    display: flex;
+    align-items: flex-start;
+    gap: 0;
+    flex-wrap: wrap;
+  }
+  .flow-step {
+    flex: 1;
+    min-width: 140px;
+    text-align: center;
+    position: relative;
+    padding: 0 8px;
+  }
+  .flow-step-num {
+    width: 28px; height: 28px;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 12px;
+    font-weight: 700;
+    margin: 0 auto 8px;
+  }
+  .flow-step-label {
+    font-size: 12px;
+    font-weight: 600;
+    margin-bottom: 4px;
+  }
+  .flow-step-desc {
+    font-size: 11px;
+    color: var(--text-dim);
+    line-height: 1.5;
+  }
+  .flow-arrow {
+    display: flex;
+    align-items: center;
+    padding-top: 4px;
+    color: var(--text-dim);
+  }
+</style>
+</head>
+<body>
+
+<h1>CrawlHub Platform Architecture</h1>
+<p class="subtitle">Full-Stack Web Scraping Platform &mdash; FastAPI + Celery + PostgreSQL + MongoDB + Redis + Coder</p>
+
+<div class="diagram">
+
+  <!-- ============ LAYER 1: Client / Entry ============ -->
+  <div class="layer">
+    <div class="layer-label" style="color:var(--accent)">Clients</div>
+    <div class="layer-content">
+
+      <div class="box border-blue" style="flex:1.5">
+        <div class="box-title"><span class="dot dot-blue"></span> Admin Dashboard (Next.js)</div>
+        <div class="item"><span class="label">Path:</span> <code>/platform</code></div>
+        <div class="item"><span class="label">Features:</span> Spider CRUD, 任务监控, 数据预览, 代理管理, 部署管理, 工作区管理, 告警规则, 通知渠道, Dashboard 统计</div>
+        <div class="item"><span class="label">实时更新:</span> SSE <code>GET /tasks/{id}/events</code></div>
+      </div>
+
+      <div class="box border-cyan" style="flex:1">
+        <div class="box-title"><span class="dot dot-cyan"></span> Coder IDE</div>
+        <div class="item"><span class="label">URL:</span> <code>http://localhost:7080</code></div>
+        <div class="item"><span class="label">用途:</span> 在线开发爬虫代码</div>
+        <div class="item"><span class="label">集成:</span> FileBrowser 文件管理, VS Code Server</div>
+      </div>
+
+      <div class="box border-purple" style="flex:1">
+        <div class="box-title"><span class="dot dot-purple"></span> CrawlHub SDK</div>
+        <div class="item"><span class="label">类型:</span> 单文件 / 零依赖 (stdlib only)</div>
+        <div class="item"><span class="label">注入方式:</span> 环境变量配置</div>
+        <div class="item"><span class="label">运行位置:</span> Spider 子进程内</div>
+      </div>
+
+    </div>
+  </div>
+
+  <!-- Arrow -->
+  <div class="arrow-row">
+    <div class="arrow-item">
+      <svg width="14" height="20"><path d="M7 0 L7 14 L3 10 M7 14 L11 10" stroke="var(--accent)" stroke-width="1.5" fill="none"/></svg>
+      HTTP / REST API
+    </div>
+    <div class="arrow-item">
+      <svg width="14" height="20"><path d="M7 0 L7 14 L3 10 M7 14 L11 10" stroke="var(--cyan)" stroke-width="1.5" fill="none"/></svg>
+      Coder API
+    </div>
+    <div class="arrow-item">
+      <svg width="14" height="20"><path d="M7 0 L7 14 L3 10 M7 14 L11 10" stroke="var(--accent2)" stroke-width="1.5" fill="none"/></svg>
+      Internal API
+    </div>
+  </div>
+
+  <!-- ============ LAYER 2: Gateway ============ -->
+  <div class="layer">
+    <div class="layer-label" style="color:var(--orange)">Gateway</div>
+    <div class="layer-content">
+
+      <div class="box border-orange">
+        <div class="box-title"><span class="dot dot-orange"></span> Nginx Reverse Proxy</div>
+        <div class="item"><span class="label">端口:</span> <code>:80</code></div>
+        <div class="grid-2" style="margin-top:8px">
+          <div class="item"><code>/platform</code> &rarr; Admin</div>
+          <div class="item"><code>/platform/api</code> &rarr; FastAPI</div>
+          <div class="item"><code>/api</code> &rarr; FastAPI</div>
+          <div class="item"><code>/console</code> &rarr; FastAPI</div>
+        </div>
+      </div>
+
+    </div>
+  </div>
+
+  <div class="arrow-row">
+    <div class="arrow-item">
+      <svg width="14" height="20"><path d="M7 0 L7 14 L3 10 M7 14 L11 10" stroke="var(--orange)" stroke-width="1.5" fill="none"/></svg>
+      Upstream Proxy
+    </div>
+  </div>
+
+  <!-- ============ LAYER 3: Application ============ -->
+  <div class="layer">
+    <div class="layer-label" style="color:var(--green)">App Layer</div>
+    <div class="layer-content">
+
+      <!-- FastAPI Server -->
+      <div class="box border-green w4">
+        <div class="box-title"><span class="dot dot-green"></span> FastAPI Application Server <span class="tag c-green">:8000</span></div>
+
+        <div class="row" style="gap:24px">
+          <!-- Routers Column -->
+          <div style="flex:2">
+            <div class="mini-title">Routers &mdash; <code>/platform/api/crawlhub</code></div>
+            <div class="grid-3">
+              <div class="tag c-blue">projects</div>
+              <div class="tag c-blue">spiders</div>
+              <div class="tag c-blue">tasks</div>
+              <div class="tag c-blue">data</div>
+              <div class="tag c-blue">proxies</div>
+              <div class="tag c-blue">deployments</div>
+              <div class="tag c-blue">alerts</div>
+              <div class="tag c-blue">workers</div>
+              <div class="tag c-blue">dashboard</div>
+              <div class="tag c-blue">datasources</div>
+              <div class="tag c-blue">notifications</div>
+              <div class="tag c-purple">internal (SDK)</div>
+              <div class="tag c-cyan">coder_workspaces</div>
+            </div>
+
+            <div class="mini-section">
+              <div class="mini-title">Internal API (SDK &harr; Server)</div>
+              <div class="grid-2">
+                <div class="item"><code>POST /items</code> 数据上报</div>
+                <div class="item"><code>POST /progress</code> 进度上报</div>
+                <div class="item"><code>POST /heartbeat</code> 心跳</div>
+                <div class="item"><code>POST /checkpoint</code> 断点保存</div>
+                <div class="item"><code>GET /proxy/rotate</code> 代理轮换</div>
+                <div class="item"><code>POST /files/upload</code> 文件上传</div>
+                <div class="item"><code>GET /task/status</code> 取消检测</div>
+              </div>
+            </div>
+          </div>
+
+          <!-- Services Column -->
+          <div style="flex:1.5">
+            <div class="mini-title">Services</div>
+            <div class="item"><span class="dot dot-green" style="width:6px;height:6px"></span> <span class="label">SpiderRunnerService</span> &mdash; 子进程执行 + 资源限制</div>
+            <div class="item"><span class="dot dot-green" style="width:6px;height:6px"></span> <span class="label">DeploymentService</span> &mdash; GridFS 版本管理</div>
+            <div class="item"><span class="dot dot-green" style="width:6px;height:6px"></span> <span class="label">DataService</span> &mdash; 数据查询/导出</div>
+            <div class="item"><span class="dot dot-green" style="width:6px;height:6px"></span> <span class="label">DatasourceService</span> &mdash; 外部数据源</div>
+            <div class="item"><span class="dot dot-green" style="width:6px;height:6px"></span> <span class="label">DatasourceWriter</span> &mdash; PG/MySQL/Mongo 写入</div>
+            <div class="item"><span class="dot dot-green" style="width:6px;height:6px"></span> <span class="label">ProxyService</span> &mdash; 代理池管理</div>
+            <div class="item"><span class="dot dot-green" style="width:6px;height:6px"></span> <span class="label">NotificationService</span> &mdash; 多渠道通知</div>
+            <div class="item"><span class="dot dot-green" style="width:6px;height:6px"></span> <span class="label">AlertService</span> &mdash; 告警记录</div>
+            <div class="item"><span class="dot dot-green" style="width:6px;height:6px"></span> <span class="label">WebhookService</span> &mdash; 回调通知</div>
+            <div class="item"><span class="dot dot-green" style="width:6px;height:6px"></span> <span class="label">CoderClient</span> &mdash; 工作区 API</div>
+            <div class="item"><span class="dot dot-green" style="width:6px;height:6px"></span> <span class="label">FileBrowserService</span> &mdash; 文件同步</div>
+            <div class="item"><span class="dot dot-green" style="width:6px;height:6px"></span> <span class="label">LogService</span> &mdash; 日志持久化</div>
+          </div>
+        </div>
+
+        <div class="mini-section">
+          <div class="mini-title">Extensions</div>
+          <div style="display:flex;gap:6px;flex-wrap:wrap">
+            <div class="tag c-red">ext_redis</div>
+            <div class="tag c-green">ext_mongodb</div>
+            <div class="tag c-orange">ext_celery</div>
+            <div class="tag c-cyan">ext_storage</div>
+            <div class="tag c-pink">ext_mail</div>
+            <div class="tag c-purple">ext_es</div>
+            <div class="tag c-yellow">ext_logging</div>
+          </div>
+        </div>
+      </div>
+
+    </div>
+  </div>
+
+  <div class="arrow-row">
+    <div class="arrow-item">
+      <svg width="14" height="20"><path d="M7 0 L7 14 L3 10 M7 14 L11 10" stroke="var(--red)" stroke-width="1.5" fill="none"/></svg>
+      Task Queue (Redis Broker)
+    </div>
+    <div class="arrow-item">
+      <svg width="14" height="20"><path d="M7 0 L7 6 M7 8 L7 14 L3 10 M7 14 L11 10" stroke="var(--green)" stroke-width="1.5" fill="none" stroke-dasharray="2,2"/></svg>
+      Async DB Sessions
+    </div>
+  </div>
+
+  <!-- ============ LAYER 4: Workers ============ -->
+  <div class="layer">
+    <div class="layer-label" style="color:var(--pink)">Workers</div>
+    <div class="layer-content">
+
+      <!-- Celery Worker -->
+      <div class="box border-pink w3">
+        <div class="box-title"><span class="dot dot-pink"></span> Celery Worker <span class="tag c-pink">prefork pool</span></div>
+
+        <div class="row" style="gap:16px">
+          <div style="flex:1">
+            <div class="mini-title">Spider 任务</div>
+            <div class="item"><code>execute_spider</code> &mdash; 主执行流程 + Redis 分布式锁</div>
+            <div class="item"><code>run_scheduled_spiders</code> &mdash; Cron 调度扫描</div>
+            <div class="item"><code>check_task_heartbeats</code> &mdash; 超时检测</div>
+            <div class="mini-section">
+              <div class="mini-title">执行细节</div>
+              <div class="item">1. 获取锁 <code>crawlhub:spider_lock:{id}</code></div>
+              <div class="item">2. 准备工作区 (GridFS/Coder 拉取)</div>
+              <div class="item">3. 安装依赖 <code>pip install</code></div>
+              <div class="item">4. 子进程执行 (memory_limit + timeout)</div>
+              <div class="item">5. 轮询 (5s) 检查状态 + 取消</div>
+              <div class="item">6. 智能重试 (network/auth/parse/system)</div>
+            </div>
+          </div>
+          <div style="flex:1">
+            <div class="mini-title">代理 & 数据源</div>
+            <div class="item"><code>check_all_proxies</code> &mdash; 并发健康检查</div>
+            <div class="item"><code>reset_cooldown_proxies</code> &mdash; 冷却重置</div>
+            <div class="item"><code>check_datasource_health</code> &mdash; 连接验证</div>
+
+            <div class="mini-section">
+              <div class="mini-title">告警 & 数据</div>
+              <div class="item"><code>evaluate_alert_rules</code> &mdash; 规则评估 + 通知</div>
+              <div class="item"><code>archive_expiring_data</code> &mdash; 80天+ 归档</div>
+            </div>
+
+            <div class="mini-section">
+              <div class="mini-title">其他任务</div>
+              <div class="item"><code>billing_tasks</code> &mdash; 订阅/订单</div>
+              <div class="item"><code>document_task</code> &mdash; 文档索引</div>
+              <div class="item"><code>mail_*_task</code> &mdash; 邮件发送</div>
+            </div>
+          </div>
+        </div>
+
+        <div class="mini-section">
+          <div class="mini-title">模式: sync def &rarr; run_async() &rarr; asyncio.run() | TaskSessionLocal(NullPool)</div>
+        </div>
+      </div>
+
+      <!-- Celery Beat -->
+      <div class="box border-yellow">
+        <div class="box-title"><span class="dot dot-yellow"></span> Celery Beat</div>
+        <div class="mini-title">定时调度</div>
+        <div class="item"><code>*/1m</code> 调度扫描 + 心跳检测 + 冷却重置</div>
+        <div class="item"><code>*/2m</code> 告警规则评估</div>
+        <div class="item"><code>*/5m</code> 代理检查 + 数据源检查 + 订单过期</div>
+        <div class="item"><code>1h</code>&nbsp;&nbsp; 订阅到期 + 降级处理</div>
+        <div class="item"><code>3AM</code>&nbsp; 数据归档</div>
+        <div class="item"><code>9AM</code>&nbsp; 到期提醒</div>
+      </div>
+
+    </div>
+  </div>
+
+  <div class="arrow-row">
+    <div class="arrow-item">
+      <svg width="14" height="20"><path d="M7 0 L7 14 L3 10 M7 14 L11 10" stroke="var(--text-dim)" stroke-width="1.5" fill="none"/></svg>
+      Read / Write
+    </div>
+  </div>
+
+  <!-- ============ LAYER 5: Data ============ -->
+  <div class="layer">
+    <div class="layer-label" style="color:var(--red)">Data Layer</div>
+    <div class="layer-content">
+
+      <div class="box border-blue">
+        <div class="box-title"><span class="dot dot-blue"></span> PostgreSQL <span class="tag c-blue">:5432</span></div>
+        <div class="mini-title">核心数据模型</div>
+        <div class="grid-2">
+          <div class="item"><code>crawlhub_spiders</code></div>
+          <div class="item"><code>crawlhub_tasks</code></div>
+          <div class="item"><code>crawlhub_deployments</code></div>
+          <div class="item"><code>crawlhub_alerts</code></div>
+          <div class="item"><code>crawlhub_alert_rules</code></div>
+          <div class="item"><code>crawlhub_notification_channels</code></div>
+          <div class="item"><code>crawlhub_datasources</code></div>
+          <div class="item"><code>crawlhub_spider_datasources</code></div>
+          <div class="item"><code>crawlhub_proxies</code></div>
+          <div class="item"><code>crawlhub_projects</code></div>
+        </div>
+        <div class="mini-section">
+          <div class="item"><span class="label">ORM:</span> SQLAlchemy 2.0 Async</div>
+          <div class="item"><span class="label">迁移:</span> Alembic (async)</div>
+        </div>
+      </div>
+
+      <div class="box border-green">
+        <div class="box-title"><span class="dot dot-green"></span> MongoDB <span class="tag c-green">:27017</span></div>
+        <div class="mini-title">动态数据存储</div>
+        <div class="item"><code>spider_data</code> &mdash; 爬虫采集数据 (含去重 hash)</div>
+        <div class="item"><code>spider_logs</code> &mdash; 任务执行日志</div>
+        <div class="item"><code>spider_deployments</code> &mdash; GridFS 代码快照</div>
+        <div class="mini-section">
+          <div class="item"><span class="label">Driver:</span> Motor (async)</div>
+          <div class="item"><span class="label">Database:</span> <code>fastapi</code></div>
+          <div class="item"><span class="label">归档:</span> 80天+ &rarr; JSONL &rarr; Storage</div>
+        </div>
+      </div>
+
+      <div class="box border-red">
+        <div class="box-title"><span class="dot dot-red"></span> Redis <span class="tag c-red">:6379</span></div>
+        <div class="mini-title">缓存 & 消息</div>
+        <div class="item"><span class="label">Celery Broker</span> &mdash; 任务队列</div>
+        <div class="item"><span class="label">Celery Backend</span> &mdash; 结果存储</div>
+        <div class="item"><span class="label">分布式锁</span> &mdash; Spider 并发控制</div>
+        <div class="item"><span class="label">缓存</span> &mdash; 通用 KV</div>
+      </div>
+
+      <div class="box border-purple">
+        <div class="box-title"><span class="dot dot-purple"></span> File Storage</div>
+        <div class="mini-title">文件存储 (OpenDAL)</div>
+        <div class="item"><code>spider_files/</code> 上传文件</div>
+        <div class="item"><code>archives/</code> 归档数据</div>
+        <div class="item"><span class="label">Scheme:</span> <code>fs://</code></div>
+      </div>
+
+    </div>
+  </div>
+
+  <div class="divider"></div>
+
+  <!-- ============ LAYER 6: External ============ -->
+  <div class="layer">
+    <div class="layer-label" style="color:var(--cyan)">External</div>
+    <div class="layer-content">
+
+      <div class="box border-cyan">
+        <div class="box-title"><span class="dot dot-cyan"></span> Coder Platform <span class="tag c-cyan">:7080</span></div>
+        <div class="item"><span class="label">功能:</span> 在线 IDE 工作区</div>
+        <div class="item"><span class="label">API:</span> <code>/api/v2/</code> (用户/模板/工作区)</div>
+        <div class="item"><span class="label">Apps:</span> FileBrowser, VS Code</div>
+        <div class="item"><span class="label">文件同步:</span> tar.gz 上传/下载</div>
+      </div>
+
+      <div class="box border-orange">
+        <div class="box-title"><span class="dot dot-orange"></span> 外部数据源</div>
+        <div class="item"><span class="label">PostgreSQL</span> &mdash; 外部 PG 实例</div>
+        <div class="item"><span class="label">MySQL</span> &mdash; 外部 MySQL 实例</div>
+        <div class="item"><span class="label">MongoDB</span> &mdash; 外部 Mongo 实例</div>
+        <div class="item" style="margin-top:4px;font-size:11px">通过 DatasourceWriter 扇出写入</div>
+      </div>
+
+      <div class="box border-pink">
+        <div class="box-title"><span class="dot dot-pink"></span> 通知渠道</div>
+        <div class="item"><span class="dot dot-pink" style="width:6px;height:6px"></span> <span class="label">Email</span> &mdash; Resend / SMTP / SendGrid</div>
+        <div class="item"><span class="dot dot-pink" style="width:6px;height:6px"></span> <span class="label">Webhook</span> &mdash; 通用 HTTP POST</div>
+        <div class="item"><span class="dot dot-pink" style="width:6px;height:6px"></span> <span class="label">DingTalk</span> &mdash; 钉钉机器人</div>
+        <div class="item"><span class="dot dot-pink" style="width:6px;height:6px"></span> <span class="label">Slack</span> &mdash; Incoming Webhook</div>
+      </div>
+
+      <div class="box border-yellow">
+        <div class="box-title"><span class="dot dot-yellow"></span> 代理池</div>
+        <div class="item"><span class="label">协议:</span> HTTP / HTTPS / SOCKS5</div>
+        <div class="item"><span class="label">健康检查:</span> asyncio.gather (sem=10)</div>
+        <div class="item"><span class="label">策略:</span> 成功率排序 + 冷却机制</div>
+        <div class="item"><span class="label">运行时轮换:</span> SDK &harr; Internal API</div>
+      </div>
+
+    </div>
+  </div>
+
+  <!-- ============ SDK Detail ============ -->
+  <div class="flow-section">
+    <div class="flow-title"><span class="dot dot-purple"></span> CrawlHub SDK &mdash; 爬虫侧能力 (单文件 / 零依赖)</div>
+    <div class="row" style="gap:24px">
+      <div style="flex:1">
+        <div class="mini-title">反爬对抗</div>
+        <div class="item"><code>get_random_ua()</code> 随机 UA (20+)</div>
+        <div class="item"><code>get_request_headers()</code> 完整请求头</div>
+        <div class="item"><code>adaptive_throttle()</code> 自适应限速</div>
+        <div class="item"><code>SessionManager</code> Cookie/Session 管理</div>
+        <div class="item"><code>fetch_with_retry()</code> 指数退避重试</div>
+      </div>
+      <div style="flex:1">
+        <div class="mini-title">爬取管理</div>
+        <div class="item"><code>URLFrontier</code> URL 队列 + 去重</div>
+        <div class="item"><code>IncrementalCrawl</code> 增量爬取 + 断点</div>
+        <div class="item"><code>MiddlewareChain</code> 请求中间件链</div>
+        <div class="item"><code>download_file()</code> 文件下载管道</div>
+      </div>
+      <div style="flex:1">
+        <div class="mini-title">数据 & 通信</div>
+        <div class="item"><code>save_item()</code> 批量缓冲上报 (50条)</div>
+        <div class="item"><code>report_progress()</code> 进度上报</div>
+        <div class="item"><code>rotate_proxy()</code> 运行时代理轮换</div>
+        <div class="item"><code>is_cancelled()</code> 取消状态检测</div>
+        <div class="item"><code>_heartbeat_loop()</code> 后台心跳 (30s)</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ============ FLOW: Spider Lifecycle ============ -->
+  <div class="flow-section">
+    <div class="flow-title"><span class="dot dot-green"></span> Spider 完整生命周期</div>
+    <div class="flow-steps">
+      <div class="flow-step">
+        <div class="flow-step-num c-cyan">1</div>
+        <div class="flow-step-label">创建项目</div>
+        <div class="flow-step-desc">Project + Spider 模型<br>选择来源: Empty / Git / Upload</div>
+      </div>
+      <div class="flow-arrow">&rarr;</div>
+      <div class="flow-step">
+        <div class="flow-step-num c-cyan">2</div>
+        <div class="flow-step-label">在线开发</div>
+        <div class="flow-step-desc">Coder 工作区<br>VS Code + FileBrowser<br>引入 SDK</div>
+      </div>
+      <div class="flow-arrow">&rarr;</div>
+      <div class="flow-step">
+        <div class="flow-step-num c-blue">3</div>
+        <div class="flow-step-label">测试运行</div>
+        <div class="flow-step-desc">is_test=True<br>从工作区拉取代码<br>实时日志查看</div>
+      </div>
+      <div class="flow-arrow">&rarr;</div>
+      <div class="flow-step">
+        <div class="flow-step-num c-green">4</div>
+        <div class="flow-step-label">部署快照</div>
+        <div class="flow-step-desc">代码 &rarr; tar.gz &rarr; GridFS<br>版本自增<br>支持回滚</div>
+      </div>
+      <div class="flow-arrow">&rarr;</div>
+      <div class="flow-step">
+        <div class="flow-step-num c-orange">5</div>
+        <div class="flow-step-label">正式执行</div>
+        <div class="flow-step-desc">从部署快照恢复<br>Redis 并发锁<br>资源限制 (内存/超时)</div>
+      </div>
+      <div class="flow-arrow">&rarr;</div>
+      <div class="flow-step">
+        <div class="flow-step-num c-pink">6</div>
+        <div class="flow-step-label">数据采集</div>
+        <div class="flow-step-desc">SDK 批量上报<br>Schema 校验<br>去重 + 外部数据源扇出</div>
+      </div>
+      <div class="flow-arrow">&rarr;</div>
+      <div class="flow-step">
+        <div class="flow-step-num c-purple">7</div>
+        <div class="flow-step-label">监控告警</div>
+        <div class="flow-step-desc">心跳检测<br>告警规则评估<br>多渠道通知</div>
+      </div>
+      <div class="flow-arrow">&rarr;</div>
+      <div class="flow-step">
+        <div class="flow-step-num c-yellow">8</div>
+        <div class="flow-step-label">数据管理</div>
+        <div class="flow-step-desc">预览 + 导出<br>流式 JSON/CSV<br>定时归档 (80天+)</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ============ FLOW: Task Execution ============ -->
+  <div class="flow-section">
+    <div class="flow-title"><span class="dot dot-pink"></span> 任务执行流程 (Celery Worker)</div>
+    <div class="flow-steps">
+      <div class="flow-step">
+        <div class="flow-step-num c-red">1</div>
+        <div class="flow-step-label">接收任务</div>
+        <div class="flow-step-desc">获取 Redis 分布式锁<br><code>spider_lock:{id}</code><br>超时 1h</div>
+      </div>
+      <div class="flow-arrow">&rarr;</div>
+      <div class="flow-step">
+        <div class="flow-step-num c-orange">2</div>
+        <div class="flow-step-label">准备环境</div>
+        <div class="flow-step-desc">从 GridFS 恢复代码<br>pip install 依赖<br>注入环境变量 + SDK</div>
+      </div>
+      <div class="flow-arrow">&rarr;</div>
+      <div class="flow-step">
+        <div class="flow-step-num c-green">3</div>
+        <div class="flow-step-label">启动子进程</div>
+        <div class="flow-step-desc">subprocess + preexec_fn<br>RLIMIT_AS 内存限制<br>stdout/stderr 捕获</div>
+      </div>
+      <div class="flow-arrow">&rarr;</div>
+      <div class="flow-step">
+        <div class="flow-step-num c-blue">4</div>
+        <div class="flow-step-label">运行监控</div>
+        <div class="flow-step-desc">每 5s 轮询检查<br>超时截止检测<br>取消状态检测<br>心跳 + 进度更新</div>
+      </div>
+      <div class="flow-arrow">&rarr;</div>
+      <div class="flow-step">
+        <div class="flow-step-num c-purple">5</div>
+        <div class="flow-step-label">结果处理</div>
+        <div class="flow-step-desc">日志持久化 (MongoDB)<br>状态更新 (PG)<br>Webhook 回调<br>释放锁</div>
+      </div>
+      <div class="flow-arrow">&rarr;</div>
+      <div class="flow-step">
+        <div class="flow-step-num c-pink">6</div>
+        <div class="flow-step-label">失败重试</div>
+        <div class="flow-step-desc">按错误分类:<br>network: 3x/60s<br>auth: 1x/300s<br>system: 2x/120s<br>parse: 不重试</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Legend -->
+  <div class="legend">
+    <div class="legend-item"><span class="dot dot-green" style="width:10px;height:10px"></span> FastAPI Server</div>
+    <div class="legend-item"><span class="dot dot-pink" style="width:10px;height:10px"></span> Celery Worker/Beat</div>
+    <div class="legend-item"><span class="dot dot-blue" style="width:10px;height:10px"></span> PostgreSQL</div>
+    <div class="legend-item"><span class="dot dot-green" style="width:10px;height:10px;background:var(--green)"></span> MongoDB</div>
+    <div class="legend-item"><span class="dot dot-red" style="width:10px;height:10px"></span> Redis</div>
+    <div class="legend-item"><span class="dot dot-cyan" style="width:10px;height:10px"></span> Coder IDE</div>
+    <div class="legend-item"><span class="dot dot-purple" style="width:10px;height:10px"></span> CrawlHub SDK</div>
+    <div class="legend-item"><span class="dot dot-orange" style="width:10px;height:10px"></span> Nginx / External</div>
+    <div class="legend-item"><span class="dot dot-yellow" style="width:10px;height:10px"></span> Scheduler</div>
+  </div>
+
+</div>
+
+</body>
+</html>

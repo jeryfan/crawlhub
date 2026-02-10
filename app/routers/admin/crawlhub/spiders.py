@@ -2,8 +2,10 @@ import json
 
 from fastapi import APIRouter, Depends, HTTPException, Query
 from fastapi.responses import StreamingResponse
+from sqlalchemy import select, func
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from models.crawlhub import SpiderTask, SpiderTaskStatus
 from models.engine import get_db
 from schemas.crawlhub import (
     SpiderCreate,
@@ -137,6 +139,18 @@ async def run_spider(
     spider = await service.get_by_id(spider_id)
     if not spider:
         raise HTTPException(status_code=404, detail="爬虫不存在")
+
+    # Check for existing running/pending tasks
+    running_count = await db.scalar(
+        select(func.count()).select_from(
+            select(SpiderTask).where(
+                SpiderTask.spider_id == spider_id,
+                SpiderTask.status.in_([SpiderTaskStatus.PENDING, SpiderTaskStatus.RUNNING]),
+            ).subquery()
+        )
+    )
+    if running_count and running_count > 0:
+        raise HTTPException(status_code=409, detail="该爬虫已有运行中或等待中的任务")
 
     # 先创建任务记录，确保前端 refetch 后立即可见
     runner = SpiderRunnerService(db)
